@@ -1,76 +1,96 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import '../profile/driver_profile_screen.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 
-class Pedido {
-  final String cliente;
-  final int cantidad;
-  final double total;
-  final String direccion;
-  final String estado;
+class DriverHomeScreen extends StatefulWidget {
+  final Usuario usuario;
 
-  Pedido({
-    required this.cliente,
-    required this.cantidad,
-    required this.total,
-    required this.direccion,
-    required this.estado,
-  });
+  const DriverHomeScreen({super.key, required this.usuario});
+
+  @override
+  State<DriverHomeScreen> createState() => _DriverHomeScreenState();
 }
 
-class DriverHomeScreen extends StatelessWidget {
-  final Repartidor repartidor;
+class _DriverHomeScreenState extends State<DriverHomeScreen> {
+  final PedidoService _pedidoService = PedidoService();
+  final UserService _userService = UserService();
 
-  const DriverHomeScreen({
-    super.key,
-    required this.repartidor,
-  });
+  Pedido? pedidoActual;
+  Usuario? cliente;
+
+  int pendientes = 0;
+  int entregadosHoy = 0;
+
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final asignados = await _pedidoService.obtenerPedidosAsignados(
+        widget.usuario.uid,
+      );
+
+      if (asignados.isNotEmpty) {
+        pedidoActual = asignados.first;
+
+        cliente = await _userService.getUserById(pedidoActual!.clienteId);
+      }
+
+      final completados = await _pedidoService.obtenerPedidosCompletadosHoy(
+        widget.usuario.uid,
+      );
+
+      setState(() {
+        pendientes = asignados.length;
+        entregadosHoy = completados.length;
+        isLoading = false;
+      });
+    } catch (_) {
+      setState(() => isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-
-    final pedido = Pedido(
-      cliente: "Christian Acosta",
-      cantidad: 4,
-      total: 140,
-      direccion: "Calle Principal 123, Col. Centro",
-      estado: "En reparto",
-    );
-
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            _buildStats(),
-            const SizedBox(height: 20),
-            _buildCurrentOrder(pedido),
-            const SizedBox(height: 20),
-            _buildQuickAccess(),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  _buildStats(),
+                  const SizedBox(height: 20),
+                  _buildCurrentOrder(),
+                  const SizedBox(height: 20),
+                  _buildQuickAccess(),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
     );
   }
 
+  /// =========================
+  /// HEADER
+  /// =========================
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
@@ -81,7 +101,7 @@ class DriverHomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Hola ${repartidor.nombre}",
+            "Hola ${widget.usuario.nombre}",
             style: const TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -98,25 +118,28 @@ class DriverHomeScreen extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// STATS
+  /// =========================
   Widget _buildStats() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
-        children: const [
+        children: [
           Expanded(
             child: _StatCard(
               icon: Icons.inventory_2_outlined,
               title: "Pendientes",
-              value: "3",
+              value: "$pendientes",
               color: Colors.blue,
             ),
           ),
-          SizedBox(width: 15),
+          const SizedBox(width: 15),
           Expanded(
             child: _StatCard(
               icon: Icons.check_circle_outline,
-              title: "Entrega\ndos hoy",
-              value: "12",
+              title: "Entregados\nhoy",
+              value: "$entregadosHoy",
               color: Colors.green,
             ),
           ),
@@ -125,7 +148,17 @@ class DriverHomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCurrentOrder(Pedido pedido) {
+  /// =========================
+  /// PEDIDO ACTUAL
+  /// =========================
+  Widget _buildCurrentOrder() {
+    if (pedidoActual == null) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: Text("No hay pedidos en curso"),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -133,10 +166,7 @@ class DriverHomeScreen extends StatelessWidget {
         children: [
           const Text(
             "Pedido en curso",
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           ),
           const SizedBox(height: 10),
 
@@ -146,43 +176,41 @@ class DriverHomeScreen extends StatelessWidget {
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                ),
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
               ],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text("Cliente"),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 5),
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.orange.withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(
-                        pedido.estado,
-                        style: const TextStyle(
+                      child: const Text(
+                        "En proceso",
+                        style: TextStyle(
                           color: Colors.orange,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                    )
+                    ),
                   ],
                 ),
 
                 const SizedBox(height: 5),
 
                 Text(
-                  pedido.cliente,
+                  cliente?.nombre ?? "Cliente",
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -195,7 +223,7 @@ class DriverHomeScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text("Garrafones:"),
-                    Text("${pedido.cantidad} unidades"),
+                    Text("${pedidoActual!.cantidad} unidades"),
                   ],
                 ),
 
@@ -205,7 +233,7 @@ class DriverHomeScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text("Total:"),
-                    Text("\$${pedido.total} MXN"),
+                    Text("\$${pedidoActual!.total.toStringAsFixed(0)} MXN"),
                   ],
                 ),
 
@@ -213,15 +241,14 @@ class DriverHomeScreen extends StatelessWidget {
 
                 Row(
                   children: [
-                    const Icon(Icons.location_on,
-                        color: Colors.red, size: 16),
+                    const Icon(Icons.location_on, color: Colors.red, size: 16),
                     const SizedBox(width: 5),
                     Expanded(
                       child: Text(
-                        pedido.direccion,
+                        pedidoActual!.direccionEntrega,
                         style: const TextStyle(color: Colors.grey),
                       ),
-                    )
+                    ),
                   ],
                 ),
 
@@ -230,10 +257,12 @@ class DriverHomeScreen extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      // 👉 aquí luego conectamos pantalla de detalle
+                    },
                     child: const Text("Ver detalles"),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -242,6 +271,9 @@ class DriverHomeScreen extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// QUICK ACCESS
+  /// =========================
   Widget _buildQuickAccess() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -250,10 +282,7 @@ class DriverHomeScreen extends StatelessWidget {
         children: [
           const Text(
             "Accesos rápidos",
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 16,
-            ),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
           ),
           const SizedBox(height: 10),
 
@@ -262,12 +291,6 @@ class DriverHomeScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                ),
-              ],
             ),
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -282,7 +305,7 @@ class DriverHomeScreen extends StatelessWidget {
                 Icon(Icons.arrow_forward_ios, size: 16),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
@@ -309,12 +332,6 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

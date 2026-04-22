@@ -1,123 +1,71 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import '../profile/driver_profile_screen.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/data/services/delivery_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
+import 'package:intl/intl.dart';
 
-class Cliente {
-  final String nombre;
-  final String telefono;
-  final String direccion;
+class DriverOrderScreen extends StatefulWidget {
+  final Pedido pedido;
 
-  Cliente({
-    required this.nombre,
-    required this.telefono,
-    required this.direccion,
-  });
+  const DriverOrderScreen({super.key, required this.pedido});
+
+  @override
+  State<DriverOrderScreen> createState() => _DriverOrderScreenState();
 }
 
-class Pedido {
-  final Cliente cliente;
-  final String fecha;
-  final int cantidad;
-  final double total;
-  final String estado;
+class _DriverOrderScreenState extends State<DriverOrderScreen> {
+  final DeliveryService _deliveryService = DeliveryService();
+  final UserService _userService = UserService();
 
-  Pedido({
-    required this.cliente,
-    required this.fecha,
-    required this.cantidad,
-    required this.total,
-    required this.estado,
-  });
-}
+  Usuario? cliente;
+  bool isLoading = true;
 
-class DriverOrderScreen extends StatelessWidget {
-  final Repartidor repartidor;
+  @override
+  void initState() {
+    super.initState();
+    _loadCliente();
+  }
 
-  const DriverOrderScreen({
-    super.key,
-    required this.repartidor,
-  });
+  Future<void> _loadCliente() async {
+    cliente = await _userService.getUserById(widget.pedido.clienteId);
+
+    setState(() {
+      isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-
-    final pedido = Pedido(
-      cliente: Cliente(
-        nombre: "Christian Acosta",
-        telefono: "555-1234-5678",
-        direccion: "Calle Principal 123, Col. Centro",
-      ),
-      fecha: "10 Nov 2025",
-      cantidad: 4,
-      total: 140,
-      estado: "En reparto",
-    );
+    final pedido = widget.pedido;
 
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            _buildStatus(pedido),
-            const SizedBox(height: 20),
-            _buildClientInfo(pedido),
-            const SizedBox(height: 20),
-            _buildOrderDetails(pedido),
-            const SizedBox(height: 20),
-            _buildNotes(),
-            const SizedBox(height: 20),
-            _buildButtons(pedido),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
-        ),
-      ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Pedido en Curso",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  _buildStatus(pedido),
+                  const SizedBox(height: 20),
+                  _buildClientInfo(),
+                  const SizedBox(height: 20),
+                  _buildOrderDetails(pedido),
+                  const SizedBox(height: 20),
+                  _buildButtons(pedido),
+                  const SizedBox(height: 30),
+                ],
+              ),
             ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            "Detalles de entrega",
-            style: TextStyle(color: Colors.white70),
-          ),
-        ],
-      ),
     );
   }
 
+  /// =========================
+  /// STATUS
+  /// =========================
   Widget _buildStatus(Pedido pedido) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -130,7 +78,7 @@ class DriverOrderScreen extends StatelessWidget {
         ),
         child: Center(
           child: Text(
-            pedido.estado,
+            _estadoTexto(pedido.estado),
             style: const TextStyle(
               color: Colors.orange,
               fontWeight: FontWeight.w600,
@@ -141,7 +89,10 @@ class DriverOrderScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildClientInfo(Pedido pedido) {
+  /// =========================
+  /// CLIENTE
+  /// =========================
+  Widget _buildClientInfo() {
     return _card(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,9 +103,8 @@ class DriverOrderScreen extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          const Text("Nombre"),
           Text(
-            pedido.cliente.nombre,
+            cliente?.nombre ?? "Cliente",
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
 
@@ -164,10 +114,7 @@ class DriverOrderScreen extends StatelessWidget {
             children: [
               const Icon(Icons.phone, color: Colors.blue),
               const SizedBox(width: 5),
-              Text(
-                pedido.cliente.telefono,
-                style: const TextStyle(color: Colors.blue),
-              ),
+              Text(cliente?.telefono ?? "-"),
             ],
           ),
 
@@ -177,9 +124,7 @@ class DriverOrderScreen extends StatelessWidget {
             children: [
               const Icon(Icons.location_on, color: Colors.blue),
               const SizedBox(width: 5),
-              Expanded(
-                child: Text(pedido.cliente.direccion),
-              ),
+              Expanded(child: Text(widget.pedido.direccionEntrega)),
             ],
           ),
         ],
@@ -187,7 +132,14 @@ class DriverOrderScreen extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// DETALLES
+  /// =========================
   Widget _buildOrderDetails(Pedido pedido) {
+    final fecha = pedido.fechaCreacion != null
+        ? DateFormat('dd MMM yyyy').format(pedido.fechaCreacion!)
+        : '';
+
     return _card(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -200,10 +152,7 @@ class DriverOrderScreen extends StatelessWidget {
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("Fecha:"),
-              Text(pedido.fecha),
-            ],
+            children: [const Text("Fecha:"), Text(fecha)],
           ),
 
           const SizedBox(height: 5),
@@ -223,7 +172,7 @@ class DriverOrderScreen extends StatelessWidget {
             children: [
               const Text("Total:"),
               Text(
-                "\$${pedido.total} MXN",
+                "\$${pedido.total.toStringAsFixed(0)} MXN",
                 style: const TextStyle(
                   color: Colors.blue,
                   fontWeight: FontWeight.bold,
@@ -236,75 +185,94 @@ class DriverOrderScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildNotes() {
-    return _card(
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: const [
-          Text("Notas del Pedido"),
-          Text(
-            "Agregar",
-            style: TextStyle(color: Colors.blue),
+  /// =========================
+  /// BOTONES
+  /// =========================
+  Widget _buildButtons(Pedido pedido) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          ElevatedButton.icon(
+            onPressed: () => _entregar(pedido.id),
+            icon: const Icon(Icons.check),
+            label: const Text("Marcar como Entregado"),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            onPressed: () => _noEntregado(pedido.id),
+            icon: const Icon(Icons.close),
+            label: const Text("Marcar como No Entregado"),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildButtons(Pedido pedido) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        children: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.check),
-              label: const Text("Marcar como Entregado"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-          ),
+  /// =========================
+  /// ACCIONES
+  /// =========================
+  Future<void> _entregar(String id) async {
+    await _deliveryService.marcarComoEntregado(id);
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
 
-          const SizedBox(height: 10),
+  Future<void> _noEntregado(String id) async {
+    await _deliveryService.marcarNoEntregado(id);
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
 
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.close),
-              label: const Text("Marcar como No Entregado"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _estadoTexto(EstadoPedido estado) {
+    switch (estado) {
+      case EstadoPedido.pendiente:
+        return "Pendiente";
+      case EstadoPedido.proceso:
+        return "En reparto";
+      case EstadoPedido.completado:
+        return "Entregado";
+      case EstadoPedido.cancelado:
+        return "Cancelado";
+    }
   }
 
   Widget _card(Widget child) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
-        width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-            ),
-          ],
         ),
         child: child,
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(30),
+          bottomRight: Radius.circular(30),
+        ),
+      ),
+      child: const Text(
+        "Pedido en Curso",
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

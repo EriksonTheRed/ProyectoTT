@@ -1,15 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../auth/role_selector_screen.dart';
+import 'package:purificadora_app/features/auth/login_screen.dart';
 import '../../../core/navigation/client_navigation.dart';
 
 class ProfileScreen extends StatelessWidget {
-  final Usuario usuario; 
+  final Usuario usuario;
 
-  const ProfileScreen({
-    super.key,
-    required this.usuario,
-  });
+  const ProfileScreen({super.key, required this.usuario});
 
   @override
   Widget build(BuildContext context) {
@@ -36,10 +33,7 @@ class ProfileScreen extends StatelessWidget {
       padding: const EdgeInsets.only(top: 60, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
@@ -75,10 +69,7 @@ class ProfileScreen extends StatelessWidget {
 
           Text(
             usuario.nombre,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-            ),
+            style: const TextStyle(color: Colors.white, fontSize: 18),
           ),
 
           const SizedBox(height: 15),
@@ -106,10 +97,7 @@ class ProfileScreen extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
           ],
         ),
         child: Column(
@@ -117,10 +105,7 @@ class ProfileScreen extends StatelessWidget {
           children: [
             const Text(
               "Información Personal",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
 
             const SizedBox(height: 20),
@@ -154,9 +139,7 @@ class ProfileScreen extends StatelessWidget {
           onPressed: () {
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(
-                builder: (_) => const RoleSelectorScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
               (route) => false,
             );
           },

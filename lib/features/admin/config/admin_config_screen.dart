@@ -1,24 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:purificadora_app/features/auth/login_screen.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../auth/role_selector_screen.dart';
 
 class Usuario {
   final String nombre;
   final String email;
 
-  Usuario({
-    required this.nombre,
-    required this.email,
-  });
+  Usuario({required this.nombre, required this.email});
 }
 
 class AdminConfigScreen extends StatelessWidget {
   final Usuario usuario;
 
-  const AdminConfigScreen({
-    super.key,
-    required this.usuario,
-  });
+  const AdminConfigScreen({super.key, required this.usuario});
 
   @override
   Widget build(BuildContext context) {
@@ -48,18 +42,10 @@ class AdminConfigScreen extends StatelessWidget {
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
@@ -109,12 +95,9 @@ class AdminConfigScreen extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
 
-              Text(
-                usuario.email,
-                style: const TextStyle(color: Colors.grey),
-              ),
+              Text(usuario.email, style: const TextStyle(color: Colors.grey)),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -162,10 +145,7 @@ class AdminConfigScreen extends StatelessWidget {
 
   Widget _buildSecurity() {
     return Column(
-      children: [
-        _sectionTitle("Seguridad"),
-        _option("Permisos", "Gestionar"),
-      ],
+      children: [_sectionTitle("Seguridad"), _option("Permisos", "Gestionar")],
     );
   }
 
@@ -210,9 +190,7 @@ class AdminConfigScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const RoleSelectorScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
                   (route) => false,
                 );
               },
@@ -230,10 +208,7 @@ class AdminConfigScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -250,7 +225,7 @@ class AdminConfigScreen extends StatelessWidget {
               const SizedBox(width: 5),
               const Icon(Icons.arrow_forward_ios, size: 14),
             ],
-          )
+          ),
         ],
       ),
     );
@@ -265,10 +240,7 @@ class AdminConfigScreen extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
           ],
         ),
         child: child,
@@ -293,10 +265,7 @@ class _StatusBox extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6),
           ],
         ),
         child: Column(

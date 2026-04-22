@@ -1,90 +1,84 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import '../profile/driver_profile_screen.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
+import 'package:intl/intl.dart';
 
-class Pedido {
-  final String cliente;
-  final String fecha;
-  final int cantidad;
-  final double total;
-  final String direccion;
+class DriverHistoryScreen extends StatefulWidget {
+  final Usuario usuario;
 
-  Pedido({
-    required this.cliente,
-    required this.fecha,
-    required this.cantidad,
-    required this.total,
-    required this.direccion,
-  });
+  const DriverHistoryScreen({super.key, required this.usuario});
+
+  @override
+  State<DriverHistoryScreen> createState() => _DriverHistoryScreenState();
 }
 
-class DriverHistoryScreen extends StatelessWidget {
-  final Repartidor repartidor;
+class _DriverHistoryScreenState extends State<DriverHistoryScreen> {
+  final PedidoService _pedidoService = PedidoService();
+  final UserService _userService = UserService();
 
-  const DriverHistoryScreen({
-    super.key,
-    required this.repartidor,
-  });
+  List<Pedido> pedidos = [];
+  Map<String, Usuario> clientes = {};
+
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final result = await _pedidoService.obtenerPedidosPorRepartidor(
+      widget.usuario.uid,
+    );
+
+    // 🔥 obtener clientes
+    for (var pedido in result) {
+      if (!clientes.containsKey(pedido.clienteId)) {
+        final cliente = await _userService.getUserById(pedido.clienteId);
+        if (cliente != null) {
+          clientes[pedido.clienteId] = cliente;
+        }
+      }
+    }
+
+    setState(() {
+      pedidos = result;
+      isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-
-    final pedidos = [
-      Pedido(
-        cliente: "Melisa Morales",
-        fecha: "10 Nov 2025",
-        cantidad: 4,
-        total: 140,
-        direccion: "Calle Principal 123, Col. Centro",
-      ),
-      Pedido(
-        cliente: "Yazmin Azcona",
-        fecha: "10 Nov 2025",
-        cantidad: 6,
-        total: 210,
-        direccion: "Calle Juárez 789, Col. Sur",
-      ),
-      Pedido(
-        cliente: "Laura Rodríguez",
-        fecha: "9 Nov 2025",
-        cantidad: 5,
-        total: 175,
-        direccion: "Av. Independencia 654, Col. Oeste",
-      ),
-    ];
-
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
 
-            ...pedidos.map((p) => _buildOrderCard(p)).toList(),
+                  ...pedidos.map((p) => _buildOrderCard(p)).toList(),
 
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
     );
   }
 
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
@@ -103,16 +97,19 @@ class DriverHistoryScreen extends StatelessWidget {
             ),
           ),
           SizedBox(height: 5),
-          Text(
-            "Pedidos entregados",
-            style: TextStyle(color: Colors.white70),
-          ),
+          Text("Pedidos entregados", style: TextStyle(color: Colors.white70)),
         ],
       ),
     );
   }
 
   Widget _buildOrderCard(Pedido pedido) {
+    final cliente = clientes[pedido.clienteId];
+
+    final fecha = pedido.fechaEntrega != null
+        ? DateFormat('dd MMM yyyy').format(pedido.fechaEntrega!)
+        : '';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Container(
@@ -120,25 +117,17 @@ class DriverHistoryScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
+            /// HEADER
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   children: const [
-                    Icon(Icons.check_circle,
-                        color: Colors.green, size: 18),
+                    Icon(Icons.check_circle, color: Colors.green, size: 18),
                     SizedBox(width: 6),
                     Text(
                       "Entregado",
@@ -151,11 +140,8 @@ class DriverHistoryScreen extends StatelessWidget {
                   ],
                 ),
                 Text(
-                  pedido.fecha,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
+                  fecha,
+                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
@@ -163,11 +149,8 @@ class DriverHistoryScreen extends StatelessWidget {
             const SizedBox(height: 8),
 
             Text(
-              pedido.cliente,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+              cliente?.nombre ?? "Cliente",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
 
             const SizedBox(height: 10),
@@ -187,7 +170,7 @@ class DriverHistoryScreen extends StatelessWidget {
               children: [
                 const Text("Total:"),
                 Text(
-                  "\$${pedido.total} MXN",
+                  "\$${pedido.total.toStringAsFixed(0)} MXN",
                   style: const TextStyle(
                     color: Colors.blue,
                     fontWeight: FontWeight.bold,
@@ -200,15 +183,14 @@ class DriverHistoryScreen extends StatelessWidget {
 
             Row(
               children: [
-                const Icon(Icons.location_on,
-                    color: Colors.red, size: 16),
+                const Icon(Icons.location_on, color: Colors.red, size: 16),
                 const SizedBox(width: 5),
                 Expanded(
                   child: Text(
-                    pedido.direccion,
+                    pedido.direccionEntrega,
                     style: const TextStyle(color: Colors.grey),
                   ),
-                )
+                ),
               ],
             ),
           ],
