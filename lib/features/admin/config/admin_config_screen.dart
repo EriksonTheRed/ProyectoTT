@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:purificadora_app/features/auth/login_screen.dart';
 import '../../../core/theme/app_theme.dart';
-
-class Usuario {
-  final String nombre;
-  final String email;
-
-  Usuario({required this.nombre, required this.email});
-}
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/data/services/auth_service.dart';
 
 class AdminConfigScreen extends StatelessWidget {
   final Usuario usuario;
@@ -25,11 +19,7 @@ class AdminConfigScreen extends StatelessWidget {
             const SizedBox(height: 20),
             _buildProfile(usuario),
             const SizedBox(height: 20),
-            _buildSystemStatus(),
-            const SizedBox(height: 20),
-            _buildSystemOptions(),
-            const SizedBox(height: 20),
-            _buildSecurity(),
+            _buildSystemInfo(),
             const SizedBox(height: 20),
             _buildActions(context),
             const SizedBox(height: 30),
@@ -39,6 +29,9 @@ class AdminConfigScreen extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// HEADER
+  /// =========================
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -47,32 +40,21 @@ class AdminConfigScreen extends StatelessWidget {
         gradient: LinearGradient(
           colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
-        ),
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Administración",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          SizedBox(height: 5),
-          Text(
-            "Configuración del sistema",
-            style: TextStyle(color: Colors.white70),
-          ),
-        ],
+      child: const Text(
+        "Administración",
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
 
+  /// =========================
+  /// PERFIL
+  /// =========================
   Widget _buildProfile(Usuario usuario) {
     return _card(
       Row(
@@ -81,12 +63,11 @@ class AdminConfigScreen extends StatelessWidget {
             radius: 25,
             backgroundColor: AppTheme.primaryBlue,
             child: Text(
-              usuario.nombre[0], // 🔤 Inicial del usuario
+              usuario.nombre[0],
               style: const TextStyle(color: Colors.white),
             ),
           ),
           const SizedBox(width: 15),
-
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -94,8 +75,7 @@ class AdminConfigScreen extends StatelessWidget {
                 usuario.nombre,
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-
-              Text(usuario.email, style: const TextStyle(color: Colors.grey)),
+              Text(usuario.correo, style: const TextStyle(color: Colors.grey)),
             ],
           ),
         ],
@@ -103,134 +83,92 @@ class AdminConfigScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSystemStatus() {
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              "Estado del Sistema",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            children: const [
-              _StatusBox("Tiempo Activo", "99.9%", Colors.blue),
-              SizedBox(width: 10),
-              _StatusBox("Almacenamiento", "45%", Colors.green),
-            ],
-          ),
-        ),
-      ],
+  /// =========================
+  /// INFO SISTEMA
+  /// =========================
+  Widget _buildSystemInfo() {
+    return _card(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: const [
+          Text("Sistema", style: TextStyle(fontWeight: FontWeight.bold)),
+          SizedBox(height: 10),
+          Text("Base de datos: Firebase"),
+          Text("Notificaciones: Pendiente"),
+          Text("Estado: Operativo"),
+        ],
+      ),
     );
   }
 
-  Widget _buildSystemOptions() {
-    return Column(
-      children: [
-        _sectionTitle("Sistema"),
-        _option("Base de Datos", "PostgreSQL"),
-        _option("Última Copia", "Hace 2 horas"),
-        _option("Notificaciones", "Activas"),
-      ],
-    );
-  }
-
-  Widget _buildSecurity() {
-    return Column(
-      children: [_sectionTitle("Seguridad"), _option("Permisos", "Gestionar")],
-    );
-  }
-
+  /// =========================
+  /// ACCIONES (BACKEND REAL)
+  /// =========================
   Widget _buildActions(BuildContext context) {
+    final auth = AuthService();
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
         children: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryBlue,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-              ),
-              onPressed: () {},
-              icon: const Icon(Icons.download),
-              label: const Text("Crear Copia de Seguridad"),
-            ),
+          /// 👉 CREAR USUARIO
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(context, '/admin/users');
+            },
+            icon: const Icon(Icons.person_add),
+            label: const Text("Crear Usuario"),
           ),
 
           const SizedBox(height: 10),
 
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.help_outline),
-              label: const Text("Centro de Ayuda"),
-            ),
+          /// 👉 VER PEDIDOS
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(context, '/admin/orders');
+            },
+            icon: const Icon(Icons.list),
+            label: const Text("Ver Pedidos"),
           ),
 
           const SizedBox(height: 10),
 
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
-              ),
-              onPressed: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
-              },
-              icon: const Icon(Icons.logout),
-              label: const Text("Cerrar Sesión"),
-            ),
+          /// 👉 MONITOREO
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(context, '/admin/monitor');
+            },
+            icon: const Icon(Icons.show_chart),
+            label: const Text("Monitoreo"),
+          ),
+
+          const SizedBox(height: 10),
+
+          /// 👉 LOGOUT (YA BIEN HECHO)
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              await auth.signOut();
+
+              if (!context.mounted) return;
+
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                (route) => false,
+              );
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text("Cerrar Sesión"),
           ),
         ],
       ),
     );
   }
 
-  Widget _sectionTitle(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  Widget _option(String title, String value) {
-    return _card(
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(title),
-          Row(
-            children: [
-              Text(value, style: const TextStyle(color: Colors.grey)),
-              const SizedBox(width: 5),
-              const Icon(Icons.arrow_forward_ios, size: 14),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
+  /// =========================
+  /// CARD
+  /// =========================
   Widget _card(Widget child) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
@@ -239,49 +177,8 @@ class AdminConfigScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
-          ],
         ),
         child: child,
-      ),
-    );
-  }
-}
-
-class _StatusBox extends StatelessWidget {
-  final String title;
-  final String value;
-  final Color color;
-
-  const _StatusBox(this.title, this.value, this.color);
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6),
-          ],
-        ),
-        child: Column(
-          children: [
-            Text(title, style: const TextStyle(color: Colors.grey)),
-            const SizedBox(height: 5),
-            Text(
-              value,
-              style: TextStyle(
-                color: color,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

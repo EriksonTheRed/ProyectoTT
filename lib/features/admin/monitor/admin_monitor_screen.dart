@@ -1,99 +1,98 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/data/services/admin_service.dart';
 
-class Repartidor {
-  final String nombre;
-  final String entregasHoy;
-  final String estado;
-  final Color estadoColor;
-  final String pedidoActual;
-  final String direccion;
-  final String tiempo;
-
-  Repartidor({
-    required this.nombre,
-    required this.entregasHoy,
-    required this.estado,
-    required this.estadoColor,
-    required this.pedidoActual,
-    required this.direccion,
-    required this.tiempo,
-  });
-}
-
-class AdminMonitorScreen extends StatelessWidget {
+class AdminMonitorScreen extends StatefulWidget {
   const AdminMonitorScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final List<Repartidor> repartidores = [
-      Repartidor(
-        nombre: "Christian",
-        entregasHoy: "12 entregas hoy",
-        estado: "Entregando",
-        estadoColor: Colors.orange,
-        pedidoActual: "#1234 - María González",
-        direccion: "Calle Principal 123",
-        tiempo: "Hace 1 min",
-      ),
-      Repartidor(
-        nombre: "Juan",
-        entregasHoy: "10 entregas hoy",
-        estado: "En Ruta",
-        estadoColor: Colors.blue,
-        pedidoActual: "#1235 - Pedro Sánchez",
-        direccion: "Av. Juárez 456",
-        tiempo: "Hace 2 min",
-      ),
-      Repartidor(
-        nombre: "Roberto",
-        entregasHoy: "8 entregas",
-        estado: "Disponible",
-        estadoColor: Colors.grey,
-        pedidoActual: "Base de operaciones",
-        direccion: "Base",
-        tiempo: "Hace 5 min",
-      ),
-    ];
+  State<AdminMonitorScreen> createState() => _AdminMonitorScreenState();
+}
 
+class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
+  final AdminService _adminService = AdminService();
+
+  List<Usuario> repartidores = [];
+  List<Pedido> pedidos = [];
+  Map<String, Usuario> clientes = {};
+
+  bool isLoading = true;
+
+  int enRuta = 0;
+  int activos = 0;
+  int entregasHoy = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final reps = await _adminService.getRepartidoresConEstado();
+      final orders = await _adminService.getPedidosActivos();
+      final resumen = await _adminService.getResumenAdmin();
+
+      /// mapear clientes
+      for (var p in orders) {
+        if (!clientes.containsKey(p.clienteId)) {
+          final c = await _adminService.getUsuarioById(p.clienteId);
+          if (c != null) clientes[p.clienteId] = c;
+        }
+      }
+
+      /// stats
+      enRuta = orders.where((p) => p.estado == EstadoPedido.proceso).length;
+
+      activos = reps.where((r) => r.disponible == true).length;
+
+      entregasHoy = resumen['pedidosHoy'] ?? 0;
+
+      setState(() {
+        repartidores = reps;
+        pedidos = orders;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Monitor error: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            _buildSystemStatus(),
-            const SizedBox(height: 15),
-            _buildStats(),
-            const SizedBox(height: 20),
-            _buildDriversList(repartidores),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  _buildSystemStatus(),
+                  const SizedBox(height: 15),
+                  _buildStats(),
+                  const SizedBox(height: 20),
+                  _buildDriversList(),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
     );
   }
 
+  /// HEADER
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
       ),
       child: const Column(
@@ -107,7 +106,6 @@ class AdminMonitorScreen extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 5),
           Text(
             "Estado actual de repartidores",
             style: TextStyle(color: Colors.white70),
@@ -117,40 +115,66 @@ class AdminMonitorScreen extends StatelessWidget {
     );
   }
 
+  /// SISTEMA
   Widget _buildSystemStatus() {
+    final now = TimeOfDay.now();
+
     return _card(
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: const [
-          Row(
+        children: [
+          const Row(
             children: [
               Icon(Icons.circle, color: Colors.green, size: 10),
               SizedBox(width: 8),
               Text("Sistema activo"),
             ],
           ),
-          Text("09:27:18 a.m."),
+          Text("${now.hour}:${now.minute}"),
         ],
       ),
     );
   }
 
+  /// STATS REALES
   Widget _buildStats() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
-        children: const [
-          Expanded(child: _StatBox("3", "En Ruta", Icons.local_shipping, Colors.blue)),
-          SizedBox(width: 10),
-          Expanded(child: _StatBox("5", "Activos", Icons.inventory, Colors.orange)),
-          SizedBox(width: 10),
-          Expanded(child: _StatBox("39", "Hoy", Icons.check_circle, Colors.green)),
+        children: [
+          Expanded(
+            child: _StatBox(
+              "$enRuta",
+              "En Ruta",
+              Icons.local_shipping,
+              Colors.blue,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatBox(
+              "$activos",
+              "Activos",
+              Icons.inventory,
+              Colors.orange,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatBox(
+              "$entregasHoy",
+              "Hoy",
+              Icons.check_circle,
+              Colors.green,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDriversList(List<Repartidor> repartidores) {
+  /// LISTA REAL
+  Widget _buildDriversList() {
     return Column(
       children: [
         const Padding(
@@ -170,7 +194,22 @@ class AdminMonitorScreen extends StatelessWidget {
     );
   }
 
-  Widget _driverCard(Repartidor r) {
+  Widget _driverCard(Usuario r) {
+    final pedido = pedidos
+        .where((p) => p.repartidorId == r.uid)
+        .cast<Pedido?>()
+        .firstWhere((p) => p != null, orElse: () => null);
+
+    final cliente = pedido != null ? clientes[pedido.clienteId] : null;
+
+    String estado = r.disponible == true
+        ? "Disponible"
+        : (pedido != null ? "En ruta" : "Inactivo");
+
+    Color color = r.disponible == true
+        ? Colors.grey
+        : (pedido != null ? Colors.orange : Colors.blue);
+
     return _card(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -187,10 +226,12 @@ class AdminMonitorScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(r.nombre,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
                     Text(
-                      r.entregasHoy,
+                      r.nombre,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      "Repartidor",
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                   ],
@@ -198,60 +239,56 @@ class AdminMonitorScreen extends StatelessWidget {
               ),
 
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: r.estadoColor.withOpacity(0.2),
+                  color: color.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  r.estado,
-                  style: TextStyle(color: r.estadoColor),
-                ),
-              )
+                child: Text(estado, style: TextStyle(color: color)),
+              ),
             ],
           ),
 
           const SizedBox(height: 10),
 
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF2F6FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Pedido Actual:",
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 5),
-                Text(r.pedidoActual),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
+          if (pedido != null)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F6FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.location_on,
-                      size: 14, color: Colors.red),
-                  const SizedBox(width: 5),
-                  Text(r.direccion),
+                  const Text(
+                    "Pedido Actual:",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 5),
+                  Text("#${pedido.id} - ${cliente?.nombre ?? ''}"),
                 ],
               ),
-              Text(
-                r.tiempo,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
-              )
-            ],
-          )
+            ),
+
+          const SizedBox(height: 10),
+
+          if (pedido != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.location_on, size: 14, color: Colors.red),
+                    const SizedBox(width: 5),
+                    Text(pedido.direccionEntrega),
+                  ],
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -261,17 +298,10 @@ class AdminMonitorScreen extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Container(
-        width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-            ),
-          ],
         ),
         child: child,
       ),
@@ -294,12 +324,6 @@ class _StatBox extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-          ),
-        ],
       ),
       child: Column(
         children: [

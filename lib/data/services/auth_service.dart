@@ -10,7 +10,7 @@ class AuthService {
   /// =========================
   /// REGISTRO CLIENTE
   /// =========================
-  Future<String?> signup({
+  /*Future<String?> signup({
     required String nombre,
     required String email,
     required String password,
@@ -43,6 +43,42 @@ class AuthService {
     } catch (_) {
       return "Error inesperado";
     }
+  }*/
+  Future<String?> signup({
+    required String nombre,
+    required String email,
+    required String password,
+    required String telefono,
+    required String direccion,
+    required String rol, // 🔥 nuevo
+  }) async {
+    try {
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email.trim(),
+        password: password.trim(),
+      );
+
+      final uid = userCredential.user!.uid;
+
+      final usuario = Usuario(
+        uid: uid,
+        nombre: nombre.trim(),
+        correo: email.trim(),
+        telefono: telefono.trim(),
+        rol: rol, // 🔥 ahora dinámico
+        direccion: rol == 'cliente' ? direccion.trim() : null,
+        disponible: rol == 'repartidor' ? true : null,
+      );
+
+      await _firestore.collection('users').doc(uid).set(usuario.toMap());
+
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return _handleAuthError(e);
+    } catch (e) {
+      print("ERROR SIGNUP: $e"); // 🔥 log real
+      return "Error inesperado";
+    }
   }
 
   /// =========================
@@ -63,14 +99,19 @@ class AuthService {
       final doc = await _firestore.collection('users').doc(uid).get();
 
       if (!doc.exists) {
-        throw Exception("Usuario no encontrado");
+        throw Exception("Usuario no encontrado en Firestore");
       }
 
       return Usuario.fromMap(doc.data()!);
     } on FirebaseAuthException catch (e) {
-      throw Exception(_handleAuthError(e));
-    } catch (_) {
-      throw Exception("Error inesperado");
+      // 🔥 IMPORTANTE: log real
+      print("FirebaseAuthException: ${e.code} - ${e.message}");
+      throw Exception(e.code); // temporal para debug
+    } catch (e, stack) {
+      // 🔥 LOG COMPLETO
+      print("ERROR GENERAL: $e");
+      print(stack);
+      throw Exception("Error inesperado: $e");
     }
   }
 

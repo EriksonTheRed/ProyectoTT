@@ -1,97 +1,92 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/navigation/client_navigation.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 
-class Repartidor {
-  final String nombre;
-  final String telefono;
-
-  Repartidor({
-    required this.nombre,
-    required this.telefono,
-  });
-}
-
-class PedidoTracking {
-  final String id;
-  final String estado;
-  final double progreso;
-  final int cantidad;
-  final double total;
-  final String direccion;
-  final Repartidor repartidor;
-
-  PedidoTracking({
-    required this.id,
-    required this.estado,
-    required this.progreso,
-    required this.cantidad,
-    required this.total,
-    required this.direccion,
-    required this.repartidor,
-  });
-}
-
-class TrackingScreen extends StatelessWidget {
+class TrackingScreen extends StatefulWidget {
   final Usuario usuario;
 
-  const TrackingScreen({
-    super.key,
-    required this.usuario,
-  });
+  const TrackingScreen({super.key, required this.usuario});
+
+  @override
+  State<TrackingScreen> createState() => _TrackingScreenState();
+}
+
+class _TrackingScreenState extends State<TrackingScreen> {
+  final PedidoService _pedidoService = PedidoService();
+  final UserService _userService = UserService();
+
+  Pedido? pedido;
+  Usuario? repartidor;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTracking();
+  }
+
+  Future<void> _loadTracking() async {
+    try {
+      final pedidos = await _pedidoService.obtenerPedidosCliente(
+        widget.usuario.uid,
+      );
+
+      pedido = pedidos.firstWhere(
+        (p) =>
+            p.estado == EstadoPedido.pendiente ||
+            p.estado == EstadoPedido.proceso,
+      );
+
+      if (pedido!.repartidorId != null) {
+        repartidor = await _userService.getUserById(pedido!.repartidorId!);
+      }
+    } catch (_) {
+      pedido = null;
+    }
+
+    setState(() {
+      isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-
-    final pedido = PedidoTracking(
-      id: "PED-1234",
-      estado: "En reparto",
-      progreso: 0.7,
-      cantidad: 3,
-      total: 105,
-      direccion: usuario.direccion,
-      repartidor: Repartidor(
-        nombre: "Erick Castañeda",
-        telefono: "+52 123 456 7890",
-      ),
-    );
-
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(pedido),
-            const SizedBox(height: 20),
-            _buildStatusCard(pedido),
-            const SizedBox(height: 20),
-            _buildTimelineCard(),
-            const SizedBox(height: 20),
-            _buildDriverCard(pedido),
-            const SizedBox(height: 20),
-            _buildDetailsCard(pedido),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : pedido == null
+          ? const Center(child: Text("No hay pedido activo"))
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  _buildStatusCard(),
+                  const SizedBox(height: 20),
+                  _buildDriverCard(),
+                  const SizedBox(height: 20),
+                  _buildDetailsCard(),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
     );
   }
 
-  Widget _buildHeader(PedidoTracking pedido) {
+  /// =========================
+  /// HEADER
+  /// =========================
+  Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
@@ -112,7 +107,7 @@ class TrackingScreen extends StatelessWidget {
           const SizedBox(height: 8),
           const Text("Pedido", style: TextStyle(color: Colors.white70)),
           Text(
-            "#${pedido.id}",
+            "#${pedido!.id}",
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w600,
@@ -123,47 +118,33 @@ class TrackingScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusCard(PedidoTracking pedido) {
+  /// =========================
+  /// STATUS
+  /// =========================
+  Widget _buildStatusCard() {
+    final estadoTexto = _estadoTexto(pedido!.estado);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [
-              AppTheme.primaryBlue,
-              AppTheme.darkBlue,
-            ],
+            colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
           ),
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                const Icon(Icons.local_shipping, color: Colors.white),
-                const SizedBox(width: 8),
-                Text(
-                  pedido.estado,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Tu pedido está en camino",
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: pedido.progreso,
-              backgroundColor: Colors.white24,
-              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+            const Icon(Icons.local_shipping, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(
+              estadoTexto,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -171,66 +152,64 @@ class TrackingScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTimelineCard() {
+  /// =========================
+  /// REPARTIDOR
+  /// =========================
+  Widget _buildDriverCard() {
+    return _cardWrapper(
+      child: repartidor == null
+          ? const Text("Esperando asignación de repartidor")
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Repartidor",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(repartidor!.nombre),
+                    const SizedBox(height: 4),
+                    Text(
+                      repartidor!.telefono,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    // opcional: abrir marcador de llamada
+                  },
+                  icon: const Icon(Icons.phone),
+                  label: const Text("Llamar"),
+                ),
+              ],
+            ),
+    );
+  }
+
+  /// =========================
+  /// DETALLES
+  /// =========================
+  Widget _buildDetailsCard() {
     return _cardWrapper(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Text(
-            "Estado del pedido",
+        children: [
+          const Text(
+            "Detalles del pedido",
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
-          SizedBox(height: 20),
-          _TimelineItem(Icons.check_circle, Colors.green, "Pedido recibido", "10:30"),
-          _TimelineItem(Icons.local_shipping, Colors.blue, "En reparto", "11:00"),
-          _TimelineItem(Icons.home, Colors.grey, "Entregado", "11:30"),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDriverCard(PedidoTracking pedido) {
-    return _cardWrapper(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Repartidor", style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 6),
-              Text(pedido.repartidor.nombre),
-              const SizedBox(height: 4),
-              Text(
-                pedido.repartidor.telefono,
-                style: const TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
-          ElevatedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.phone),
-            label: const Text("Llamar"),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailsCard(PedidoTracking pedido) {
-    return _cardWrapper(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Detalles del pedido", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("${pedido.cantidad} Garrafones"),
+              Text("${pedido!.cantidad} Garrafones"),
               Text(
-                "\$${pedido.total} MXN",
+                "\$${pedido!.total.toStringAsFixed(0)} MXN",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.blue,
@@ -241,11 +220,14 @@ class TrackingScreen extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          const Text("Dirección de entrega", style: TextStyle(fontWeight: FontWeight.w600)),
+          const Text(
+            "Dirección de entrega",
+            style: TextStyle(fontWeight: FontWeight.w600),
+          ),
           const SizedBox(height: 4),
 
           Text(
-            pedido.direccion,
+            pedido!.direccionEntrega,
             style: const TextStyle(color: Colors.grey),
           ),
         ],
@@ -253,6 +235,9 @@ class TrackingScreen extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// HELPERS
+  /// =========================
   Widget _cardWrapper({required Widget child}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -262,38 +247,24 @@ class TrackingScreen extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
           ],
         ),
         child: child,
       ),
     );
   }
-}
 
-class _TimelineItem extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String time;
-
-  const _TimelineItem(this.icon, this.color, this.title, this.time);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Row(
-        children: [
-          Icon(icon, color: color),
-          const SizedBox(width: 12),
-          Expanded(child: Text(title)),
-          Text(time, style: const TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
+  String _estadoTexto(EstadoPedido estado) {
+    switch (estado) {
+      case EstadoPedido.pendiente:
+        return "Pendiente";
+      case EstadoPedido.proceso:
+        return "En camino";
+      case EstadoPedido.completado:
+        return "Entregado";
+      case EstadoPedido.cancelado:
+        return "Cancelado";
+    }
   }
 }

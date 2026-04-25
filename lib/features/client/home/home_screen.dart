@@ -1,26 +1,63 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import '../tracking/tracking_screen.dart';
 import '../../../core/navigation/client_navigation.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final Function(int)? onNavigate;
   final Usuario usuario;
 
-  const HomeScreen({
-    super.key,
-    this.onNavigate,
-    required this.usuario,
-  });
+  const HomeScreen({super.key, this.onNavigate, required this.usuario});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final PedidoService _pedidoService = PedidoService();
+
+  Pedido? pedidoActual;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPedidoActual();
+  }
+
+  Future<void> _loadPedidoActual() async {
+    try {
+      final pedidos = await _pedidoService.obtenerPedidosCliente(
+        widget.usuario.uid,
+      );
+
+      pedidoActual = pedidos.firstWhere(
+        (p) =>
+            p.estado == EstadoPedido.pendiente ||
+            p.estado == EstadoPedido.proceso,
+        orElse: () => null as Pedido,
+      );
+    } catch (_) {
+      pedidoActual = null;
+    }
+
+    setState(() {
+      isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final usuario = widget.usuario;
+
     return Container(
       color: AppTheme.lightBackground,
       child: SingleChildScrollView(
         child: Column(
           children: [
-            _buildHeader(),
+            _buildHeader(usuario),
             const SizedBox(height: 20),
             _buildActionCards(context),
             const SizedBox(height: 20),
@@ -32,21 +69,16 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  /// =========================
+  /// HEADER
+  /// =========================
+  Widget _buildHeader(Usuario usuario) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(30),
@@ -61,7 +93,6 @@ class HomeScreen extends StatelessWidget {
             style: TextStyle(color: Colors.white, fontSize: 16),
           ),
           const SizedBox(height: 12),
-
           Text(
             "Hola,\n${usuario.nombre}",
             style: const TextStyle(
@@ -70,7 +101,6 @@ class HomeScreen extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
-
           const SizedBox(height: 8),
           const Text(
             "¿Qué deseas hacer hoy?",
@@ -81,6 +111,9 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// ACTION CARDS
+  /// =========================
   Widget _buildActionCards(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -91,83 +124,52 @@ class HomeScreen extends StatelessWidget {
             title: "Hacer Pedido",
             subtitle: "Solicita tus garrafones",
             color: Colors.blue,
-            onTap: () => onNavigate?.call(1),
+            onTap: () => widget.onNavigate?.call(1),
           ),
-
           const SizedBox(height: 15),
-
           _ActionCard(
             icon: Icons.water_drop_outlined,
             title: "Seguimiento",
             subtitle: "Rastrea tu pedido actual",
             color: Colors.teal,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => Scaffold(
-                    body: TrackingScreen(
-                      usuario: usuario,
-                    ),
-
-                    bottomNavigationBar: BottomNavigationBar(
-                      currentIndex: 0,
-                      type: BottomNavigationBarType.fixed,
-                      selectedItemColor: Colors.blue,
-                      unselectedItemColor: Colors.grey,
-                      onTap: (index) {
-                        Navigator.pop(context);
-                      },
-                      items: const [
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.home),
-                          label: "Inicio",
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.shopping_cart),
-                          label: "Pedido",
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.access_time),
-                          label: "Historial",
-                        ),
-                        BottomNavigationBarItem(
-                          icon: Icon(Icons.person),
-                          label: "Perfil",
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
+            onTap: () => widget.onNavigate?.call(1),
           ),
-
           const SizedBox(height: 15),
-
           _ActionCard(
             icon: Icons.access_time,
             title: "Historial",
             subtitle: "Ver pedidos anteriores",
             color: Colors.blueAccent,
-            onTap: () => onNavigate?.call(2),
+            onTap: () => widget.onNavigate?.call(2),
           ),
-
           const SizedBox(height: 15),
-
           _ActionCard(
             icon: Icons.person_outline,
             title: "Mi Perfil",
             subtitle: "Editar información",
             color: Colors.blue,
-            onTap: () => onNavigate?.call(3),
+            onTap: () => widget.onNavigate?.call(3),
           ),
         ],
       ),
     );
   }
 
+  /// =========================
+  /// PEDIDO ACTUAL
+  /// =========================
   Widget _buildCurrentOrderCard() {
+    if (isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (pedidoActual == null) {
+      return const SizedBox();
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -177,27 +179,27 @@ class HomeScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(15),
           border: Border.all(color: Colors.blue.shade100),
         ),
-        child: const Column(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               "Pedido actual",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
-              "Tienes un pedido en camino",
-              style: TextStyle(color: Colors.blueAccent),
+              "Estado: ${pedidoActual!.estado.name}",
+              style: const TextStyle(color: Colors.blueAccent),
             ),
-            SizedBox(height: 8),
-            Text(
-              "Ver seguimiento →",
-              style: TextStyle(
-                color: Colors.blue,
-                fontWeight: FontWeight.w500,
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => widget.onNavigate?.call(1),
+              child: const Text(
+                "Ver seguimiento →",
+                style: TextStyle(
+                  color: Colors.blue,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
@@ -207,6 +209,9 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+/// =========================
+/// ACTION CARD WIDGET
+/// =========================
 class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -233,10 +238,7 @@ class _ActionCard extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
           ],
         ),
         child: Row(
@@ -263,13 +265,10 @@ class _ActionCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   subtitle,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),

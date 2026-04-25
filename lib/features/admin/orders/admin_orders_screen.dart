@@ -1,27 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-
-class Pedido {
-  final String id;
-  final String cliente;
-  final int cantidad;
-  final double total;
-  final String fecha;
-  final String direccion;
-  final String estado;
-  final String? repartidor;
-
-  Pedido({
-    required this.id,
-    required this.cliente,
-    required this.cantidad,
-    required this.total,
-    required this.fecha,
-    required this.direccion,
-    required this.estado,
-    this.repartidor,
-  });
-}
+import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/data/services/admin_service.dart';
 
 class AdminOrdersScreen extends StatefulWidget {
   const AdminOrdersScreen({super.key});
@@ -31,88 +12,95 @@ class AdminOrdersScreen extends StatefulWidget {
 }
 
 class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
+  final AdminService _adminService = AdminService();
+
   int selectedFilter = 0;
+  final filters = ["Todos", "Pendiente", "En proceso", "Completado"];
 
-  final filters = ["Todos", "Pendiente", "Asignado", "Entregado"];
+  List<Pedido> pedidos = [];
+  List<Usuario> repartidores = [];
+  Map<String, Usuario> usuarios = {};
 
-  final List<Pedido> pedidos = [
-    Pedido(
-      id: "#1234",
-      cliente: "María González",
-      cantidad: 4,
-      total: 140,
-      fecha: "18 Nov 2025",
-      direccion: "Calle Principal 123",
-      estado: "En reparto",
-      repartidor: "Christian",
-    ),
-    Pedido(
-      id: "#1236",
-      cliente: "Laura Torres",
-      cantidad: 2,
-      total: 70,
-      fecha: "18 Nov 2025",
-      direccion: "Col. Centro 789",
-      estado: "Pendiente",
-    ),
-    Pedido(
-      id: "#1237",
-      cliente: "Carlos Ramírez",
-      cantidad: 3,
-      total: 105,
-      fecha: "17 Nov 2025",
-      direccion: "Calle 5 de Mayo 321",
-      estado: "Entregado",
-      repartidor: "Miguel",
-    ),
-  ];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final allPedidos = await _adminService.getAllPedidos();
+      final reps = await _adminService.getUsuariosPorRol("repartidor");
+
+      /// mapear usuarios
+      for (var p in allPedidos) {
+        if (!usuarios.containsKey(p.clienteId)) {
+          final user = await _adminService.getUsuarioById(p.clienteId);
+          if (user != null) usuarios[p.clienteId] = user;
+        }
+
+        if (p.repartidorId != null && !usuarios.containsKey(p.repartidorId)) {
+          final user = await _adminService.getUsuarioById(p.repartidorId!);
+          if (user != null) usuarios[p.repartidorId!] = user;
+        }
+      }
+
+      setState(() {
+        pedidos = allPedidos;
+        repartidores = reps;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Orders error: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  List<Pedido> get pedidosFiltrados {
+    if (selectedFilter == 0) return pedidos;
+
+    final estado = [
+      null,
+      EstadoPedido.pendiente,
+      EstadoPedido.proceso,
+      EstadoPedido.completado,
+    ][selectedFilter];
+
+    return pedidos.where((p) => p.estado == estado).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pedidosFiltrados = selectedFilter == 0
-        ? pedidos
-        : pedidos
-            .where((p) => p.estado == filters[selectedFilter])
-            .toList();
-
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            _buildSearch(),
-            const SizedBox(height: 15),
-            _buildFilters(),
-            const SizedBox(height: 15),
-            _buildOrders(pedidosFiltrados),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  _buildSearch(),
+                  const SizedBox(height: 15),
+                  _buildFilters(),
+                  const SizedBox(height: 15),
+                  _buildOrders(),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
     );
   }
 
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
       ),
       child: const Column(
@@ -126,7 +114,6 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          SizedBox(height: 5),
           Text(
             "Administra y asigna pedidos",
             style: TextStyle(color: Colors.white70),
@@ -137,18 +124,12 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   }
 
   Widget _buildSearch() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 20),
       child: TextField(
         decoration: InputDecoration(
           hintText: "Buscar por cliente o ID",
-          prefixIcon: const Icon(Icons.search),
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(15),
-            borderSide: BorderSide.none,
-          ),
+          prefixIcon: Icon(Icons.search),
         ),
       ),
     );
@@ -167,11 +148,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
             final isSelected = selectedFilter == index;
 
             return GestureDetector(
-              onTap: () {
-                setState(() {
-                  selectedFilter = index;
-                });
-              },
+              onTap: () => setState(() => selectedFilter = index),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15),
                 decoration: BoxDecoration(
@@ -184,7 +161,7 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
                   child: Text(
                     filters[index],
                     style: TextStyle(
-                      color: isSelected ? Colors.white : Colors.black87,
+                      color: isSelected ? Colors.white : Colors.black,
                     ),
                   ),
                 ),
@@ -196,7 +173,9 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     );
   }
 
-  Widget _buildOrders(List<Pedido> pedidos) {
+  Widget _buildOrders() {
+    final list = pedidosFiltrados;
+
     return Column(
       children: [
         Padding(
@@ -204,34 +183,23 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              "${pedidos.length} pedidos",
+              "${list.length} pedidos",
               style: const TextStyle(color: Colors.grey),
             ),
           ),
         ),
         const SizedBox(height: 10),
 
-        ...pedidos.map((pedido) => _orderCard(pedido)).toList(),
+        ...list.map(_orderCard),
       ],
     );
   }
 
-  Widget _orderCard(Pedido pedido) {
-    Color statusColor;
-
-    switch (pedido.estado) {
-      case "Pendiente":
-        statusColor = Colors.grey;
-        break;
-      case "En reparto":
-        statusColor = Colors.orange;
-        break;
-      case "Entregado":
-        statusColor = Colors.green;
-        break;
-      default:
-        statusColor = Colors.blue;
-    }
+  Widget _orderCard(Pedido p) {
+    final cliente = usuarios[p.clienteId];
+    final repartidor = p.repartidorId != null
+        ? usuarios[p.repartidorId!]
+        : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -240,106 +208,41 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-            ),
-          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// ID + estado
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(pedido.id, style: const TextStyle(color: Colors.grey)),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    pedido.estado,
-                    style: TextStyle(color: statusColor),
-                  ),
-                )
-              ],
-            ),
-
-            const SizedBox(height: 6),
-
-            /// 👤 Cliente
-            Text(
-              pedido.cliente,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            Text("#${p.id}"),
+            Text(cliente?.nombre ?? "Cliente"),
+            Text("${p.cantidad} garrafones"),
+            Text("\$${p.total} MXN"),
+            Text(p.direccionEntrega),
 
             const SizedBox(height: 10),
 
-            Row(
-              children: [
-                const Icon(Icons.water_drop, size: 16),
-                const SizedBox(width: 5),
-                Text("${pedido.cantidad} garrafones"),
-              ],
-            ),
-
-            const SizedBox(height: 5),
-
-            Row(
-              children: [
-                const Icon(Icons.attach_money, size: 16),
-                const SizedBox(width: 5),
-                Text("\$${pedido.total} MXN"),
-              ],
-            ),
-
-            const SizedBox(height: 5),
-
-            Row(
-              children: [
-                const Icon(Icons.calendar_today, size: 14),
-                const SizedBox(width: 5),
-                Text(pedido.fecha),
-              ],
-            ),
-
-            const SizedBox(height: 5),
-
-            Row(
-              children: [
-                const Icon(Icons.location_on, size: 14, color: Colors.red),
-                const SizedBox(width: 5),
-                Expanded(child: Text(pedido.direccion)),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            if (pedido.estado == "Pendiente")
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryBlue,
-                  ),
-                  onPressed: () {
-                  },
-                  child: const Text("Asignar Repartidor"),
-                ),
+            if (p.estado == EstadoPedido.pendiente)
+              ElevatedButton(
+                onPressed: () => _asignar(p.id),
+                child: const Text("Asignar Repartidor"),
               )
-            else if (pedido.repartidor != null)
-              Text(
-                "Repartidor: ${pedido.repartidor}",
-                style: const TextStyle(color: Colors.blue),
-              ),
+            else if (repartidor != null)
+              Text("Repartidor: ${repartidor.nombre}"),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _asignar(String pedidoId) async {
+    if (repartidores.isEmpty) return;
+
+    final rep = repartidores.first;
+
+    await _adminService.asignarRepartidor(
+      pedidoId: pedidoId,
+      repartidorId: rep.uid,
+    );
+
+    _loadData();
   }
 }

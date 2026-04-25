@@ -1,12 +1,30 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/features/auth/login_screen.dart';
-import '../../../core/navigation/client_navigation.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/data/services/auth_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final Usuario usuario;
 
   const ProfileScreen({super.key, required this.usuario});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final AuthService _authService = AuthService();
+  final UserService _userService = UserService();
+
+  late Usuario usuario;
+
+  @override
+  void initState() {
+    super.initState();
+    usuario = widget.usuario;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +45,9 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// HEADER
+  /// =========================
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
@@ -52,17 +73,10 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
-            ),
-            child: const CircleAvatar(
-              backgroundColor: Colors.transparent,
-              child: Icon(Icons.person, size: 50, color: Colors.white),
-            ),
+          const CircleAvatar(
+            radius: 50,
+            backgroundColor: Colors.transparent,
+            child: Icon(Icons.person, size: 50, color: Colors.white),
           ),
 
           const SizedBox(height: 12),
@@ -75,7 +89,7 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 15),
 
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: _editarPerfil,
             icon: const Icon(Icons.edit, size: 16),
             label: const Text("Editar"),
             style: ElevatedButton.styleFrom(
@@ -88,6 +102,9 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
+  /// =========================
+  /// INFO
+  /// =========================
   Widget _buildInfoCard() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -96,9 +113,6 @@ class ProfileScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8),
-          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,25 +121,27 @@ class ProfileScreen extends StatelessWidget {
               "Información Personal",
               style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
             ),
-
             const SizedBox(height: 20),
 
             _InfoTile(Icons.person, usuario.nombre),
             const SizedBox(height: 15),
 
-            _InfoTile(Icons.email, usuario.email),
+            _InfoTile(Icons.email, usuario.correo),
             const SizedBox(height: 15),
 
             _InfoTile(Icons.phone, usuario.telefono),
             const SizedBox(height: 15),
 
-            _InfoTile(Icons.location_on, usuario.direccion),
+            _InfoTile(Icons.location_on, usuario.direccion ?? ""),
           ],
         ),
       ),
     );
   }
 
+  /// =========================
+  /// LOGOUT
+  /// =========================
   Widget _logoutButton(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -136,7 +152,9 @@ class ProfileScreen extends StatelessWidget {
             backgroundColor: Colors.red,
             padding: const EdgeInsets.symmetric(vertical: 15),
           ),
-          onPressed: () {
+          onPressed: () async {
+            await _authService.signOut();
+
             Navigator.pushAndRemoveUntil(
               context,
               MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -145,6 +163,55 @@ class ProfileScreen extends StatelessWidget {
           },
           child: const Text("Cerrar sesión"),
         ),
+      ),
+    );
+  }
+
+  /// =========================
+  /// EDITAR PERFIL
+  /// =========================
+  void _editarPerfil() async {
+    final nombreController = TextEditingController(text: usuario.nombre);
+    final telefonoController = TextEditingController(text: usuario.telefono);
+    final direccionController = TextEditingController(
+      text: usuario.direccion ?? "",
+    );
+
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Editar Perfil"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: nombreController),
+            TextField(controller: telefonoController),
+            TextField(controller: direccionController),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await _userService.updateUserProfile(
+                uid: usuario.uid,
+                nombre: nombreController.text,
+                telefono: telefonoController.text,
+                direccion: direccionController.text,
+              );
+
+              setState(() {
+                usuario = usuario.copyWith(
+                  nombre: nombreController.text,
+                  telefono: telefonoController.text,
+                  direccion: direccionController.text,
+                );
+              });
+
+              Navigator.pop(context);
+            },
+            child: const Text("Guardar"),
+          ),
+        ],
       ),
     );
   }

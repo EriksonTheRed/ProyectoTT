@@ -52,6 +52,7 @@ class _SignupScreenState extends State<SignupScreen> {
       password: _passwordController.text,
       telefono: _phoneController.text,
       direccion: _addressController.text,
+      rol: _selectedRole,
     );
 
     setState(() {
@@ -148,13 +149,10 @@ class _SignupScreenState extends State<SignupScreen> {
               // Dropdown de Roles
               DropdownButtonFormField<String>(
                 value: _selectedRole,
-                decoration: const InputDecoration(
-                  labelText: 'Tipo de Usuario',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (String? newValue) {
+                onChanged: (value) {
+                  print("CAMBIO DE ROL: $value"); //
                   setState(() {
-                    _selectedRole = newValue!;
+                    _selectedRole = value!;
                   });
                 },
                 items: const [

@@ -47,8 +47,7 @@ class PedidoService {
     final snapshot = await _firestore
         .collection(collection)
         .where('id_repartidor', isEqualTo: repartidorId)
-        .where('estado', isEqualTo: EstadoPedido.completado.name)
-        .orderBy('fecha_entrega', descending: true)
+        .orderBy('fecha_creacion', descending: true) // 👈 más seguro
         .get();
 
     return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();

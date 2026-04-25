@@ -31,24 +31,30 @@ class _DriverHistoryScreenState extends State<DriverHistoryScreen> {
   }
 
   Future<void> _loadData() async {
-    final result = await _pedidoService.obtenerPedidosPorRepartidor(
-      widget.usuario.uid,
-    );
+    try {
+      final result = await _pedidoService.obtenerPedidosPorRepartidor(
+        widget.usuario.uid,
+      );
 
-    // 🔥 obtener clientes
-    for (var pedido in result) {
-      if (!clientes.containsKey(pedido.clienteId)) {
-        final cliente = await _userService.getUserById(pedido.clienteId);
-        if (cliente != null) {
-          clientes[pedido.clienteId] = cliente;
+      for (var pedido in result) {
+        if (!clientes.containsKey(pedido.clienteId)) {
+          final cliente = await _userService.getUserById(pedido.clienteId);
+          if (cliente != null) {
+            clientes[pedido.clienteId] = cliente;
+          }
         }
       }
-    }
 
-    setState(() {
-      pedidos = result;
-      isLoading = false;
-    });
+      setState(() {
+        pedidos = result;
+        isLoading = false;
+      });
+    } catch (e) {
+      print("ERROR DRIVER HISTORY: $e");
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   @override
@@ -57,6 +63,8 @@ class _DriverHistoryScreenState extends State<DriverHistoryScreen> {
       backgroundColor: AppTheme.lightBackground,
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
+          : pedidos.isEmpty
+          ? const Center(child: Text("No hay pedidos aún"))
           : SingleChildScrollView(
               child: Column(
                 children: [

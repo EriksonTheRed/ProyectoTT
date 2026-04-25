@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/navigation/client_navigation.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
 
 class Producto {
   final String nombre;
@@ -15,12 +17,9 @@ class Producto {
 }
 
 class OrderScreen extends StatefulWidget {
-  final Usuario usuario; 
+  final Usuario usuario;
 
-  const OrderScreen({
-    super.key,
-    required this.usuario,
-  });
+  const OrderScreen({super.key, required this.usuario});
 
   @override
   State<OrderScreen> createState() => _OrderScreenState();
@@ -28,6 +27,9 @@ class OrderScreen extends StatefulWidget {
 
 class _OrderScreenState extends State<OrderScreen> {
   int quantity = 1;
+  bool isLoading = false;
+
+  final PedidoService _pedidoService = PedidoService();
 
   final producto = Producto(
     nombre: "Garrafón de Agua",
@@ -45,12 +47,9 @@ class _OrderScreenState extends State<OrderScreen> {
         title: const Text("Hacer Pedido"),
         centerTitle: true,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
-            bottom: Radius.circular(25),
-          ),
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(25)),
         ),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -64,14 +63,16 @@ class _OrderScreenState extends State<OrderScreen> {
           ],
         ),
       ),
-
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(20),
-        child: _confirmButton(),
+        child: _confirmButton(total),
       ),
     );
   }
 
+  /// =========================
+  /// PRODUCTO
+  /// =========================
   Widget _productCard() {
     return _cardContainer(
       Column(
@@ -87,7 +88,6 @@ class _OrderScreenState extends State<OrderScreen> {
                 ),
               ),
               const SizedBox(width: 15),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -111,12 +111,12 @@ class _OrderScreenState extends State<OrderScreen> {
                     ),
                   ],
                 ),
-              )
+              ),
             ],
           ),
-
           const SizedBox(height: 20),
 
+          /// CANTIDAD
           Container(
             padding: const EdgeInsets.all(15),
             decoration: BoxDecoration(
@@ -152,7 +152,9 @@ class _OrderScreenState extends State<OrderScreen> {
                     _circleButton(
                       icon: Icons.add,
                       onTap: () {
-                        setState(() => quantity++);
+                        if (quantity < 5) {
+                          setState(() => quantity++);
+                        }
                       },
                       filled: true,
                     ),
@@ -160,19 +162,21 @@ class _OrderScreenState extends State<OrderScreen> {
                 ),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
   }
 
+  /// =========================
+  /// DIRECCIÓN
+  /// =========================
   Widget _addressCard() {
     return _cardContainer(
       Row(
         children: [
           const Icon(Icons.location_on, color: Colors.blue),
           const SizedBox(width: 10),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,9 +186,8 @@ class _OrderScreenState extends State<OrderScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
-
                 Text(
-                  widget.usuario.direccion,
+                  widget.usuario.direccion ?? "Sin dirección",
                   style: const TextStyle(color: Colors.grey),
                 ),
               ],
@@ -195,6 +198,9 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
+  /// =========================
+  /// RESUMEN
+  /// =========================
   Widget _summaryCard(double total) {
     return _cardContainer(
       Column(
@@ -202,10 +208,7 @@ class _OrderScreenState extends State<OrderScreen> {
         children: [
           const Text(
             "Resumen del pedido",
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.blue,
-            ),
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
           ),
           const SizedBox(height: 15),
 
@@ -251,39 +254,73 @@ class _OrderScreenState extends State<OrderScreen> {
     );
   }
 
-  Widget _confirmButton() {
+  /// =========================
+  /// CONFIRMAR PEDIDO
+  /// =========================
+  Widget _confirmButton(double total) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 15),
           backgroundColor: AppTheme.primaryBlue,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
         ),
-        onPressed: () {
-          // enviarPedido(widget.usuario, quantity, total)
-        },
+        onPressed: isLoading ? null : () => _crearPedido(total),
         icon: const Icon(Icons.water_drop),
-        label: const Text("Confirmar Pedido"),
+        label: isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text("Confirmar Pedido"),
       ),
     );
   }
 
+  /// =========================
+  /// CREAR PEDIDO
+  /// =========================
+  Future<void> _crearPedido(double total) async {
+    if (widget.usuario.direccion == null || widget.usuario.direccion!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Agrega una dirección primero")),
+      );
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    final error = await _pedidoService.crearPedido(
+      clienteId: widget.usuario.uid,
+      direccionEntrega: widget.usuario.direccion!,
+      telefono: widget.usuario.telefono,
+      cantidad: quantity,
+      total: total,
+      ubicacion: const GeoPoint(0, 0), // temporal
+    );
+
+    setState(() => isLoading = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Pedido creado correctamente")),
+    );
+
+    Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+  }
+
+  /// =========================
+  /// UI HELPERS
+  /// =========================
   Widget _cardContainer(Widget child) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: child,
     );
@@ -296,20 +333,14 @@ class _OrderScreenState extends State<OrderScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(50),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: filled ? AppTheme.primaryBlue : Colors.transparent,
           shape: BoxShape.circle,
-          border: filled
-              ? null
-              : Border.all(color: AppTheme.primaryBlue),
+          border: filled ? null : Border.all(color: AppTheme.primaryBlue),
         ),
-        child: Icon(
-          icon,
-          color: filled ? Colors.white : AppTheme.primaryBlue,
-        ),
+        child: Icon(icon, color: filled ? Colors.white : AppTheme.primaryBlue),
       ),
     );
   }

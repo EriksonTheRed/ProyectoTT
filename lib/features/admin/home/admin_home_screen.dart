@@ -1,105 +1,100 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/data/services/admin_service.dart';
 
-class ResumenAdmin {
-  final int clientes;
-  final int repartidores;
-  final int pedidosHoy;
-  final double ventas;
-
-  ResumenAdmin({
-    required this.clientes,
-    required this.repartidores,
-    required this.pedidosHoy,
-    required this.ventas,
-  });
-}
-
-class Pedido {
-  final String id;
-  final String cliente;
-  final String repartidor;
-  final String estado;
-
-  Pedido({
-    required this.id,
-    required this.cliente,
-    required this.repartidor,
-    required this.estado,
-  });
-}
-
-class AdminHomeScreen extends StatelessWidget {
+class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
 
   @override
+  State<AdminHomeScreen> createState() => _AdminHomeScreenState();
+}
+
+class _AdminHomeScreenState extends State<AdminHomeScreen> {
+  final AdminService _adminService = AdminService();
+
+  int clientes = 0;
+  int repartidores = 0;
+  int pedidosHoy = 0;
+  double ventas = 0;
+
+  List<Pedido> pedidosActivos = [];
+  Map<String, Usuario> usuarios = {};
+
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final resumen = await _adminService.getResumenAdmin();
+      final pedidos = await _adminService.getPedidosActivos();
+
+      /// Obtener usuarios relacionados
+      for (var p in pedidos) {
+        if (!usuarios.containsKey(p.clienteId)) {
+          final user = await _adminService.getUsuarioById(p.clienteId);
+          if (user != null) usuarios[p.clienteId] = user;
+        }
+
+        if (p.repartidorId != null && !usuarios.containsKey(p.repartidorId)) {
+          final user = await _adminService.getUsuarioById(p.repartidorId!);
+          if (user != null) usuarios[p.repartidorId!] = user;
+        }
+      }
+
+      setState(() {
+        clientes = resumen['clientes'] ?? 0;
+        repartidores = resumen['repartidores'] ?? 0;
+        pedidosHoy = resumen['pedidosHoy'] ?? 0;
+        ventas = resumen['ventas'] ?? 0;
+        pedidosActivos = pedidos;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Error admin: $e");
+      setState(() => isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final resumen = ResumenAdmin(
-      clientes: 248,
-      repartidores: 12,
-      pedidosHoy: 47,
-      ventas: 6580,
-    );
-
-    final pedidos = [
-      Pedido(
-        id: "#1234",
-        cliente: "María González",
-        repartidor: "Christian",
-        estado: "En reparto",
-      ),
-      Pedido(
-        id: "#1235",
-        cliente: "Pedro Sánchez",
-        repartidor: "Juan",
-        estado: "Preparando",
-      ),
-      Pedido(
-        id: "#1236",
-        cliente: "Laura Torres",
-        repartidor: "Miguel",
-        estado: "En reparto",
-      ),
-    ];
-
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            _buildStatsGrid(resumen),
-            const SizedBox(height: 20),
-            _buildPerformance(),
-            const SizedBox(height: 20),
-            _buildActiveOrders(pedidos),
-            const SizedBox(height: 30),
-          ],
-        ),
-      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 20),
+                  _buildStatsGrid(),
+                  const SizedBox(height: 20),
+                  _buildPerformance(),
+                  const SizedBox(height: 20),
+                  _buildActiveOrders(),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
     );
   }
 
+  /// =========================
+  /// HEADER
+  /// =========================
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(
-        top: 60,
-        left: 20,
-        right: 20,
-        bottom: 30,
-      ),
+      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            AppTheme.primaryBlue,
-            AppTheme.darkBlue,
-          ],
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(30),
-          bottomRight: Radius.circular(30),
+          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
       ),
       child: const Column(
@@ -123,7 +118,10 @@ class AdminHomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsGrid(ResumenAdmin resumen) {
+  /// =========================
+  /// STATS
+  /// =========================
+  Widget _buildStatsGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: GridView.count(
@@ -134,59 +132,57 @@ class AdminHomeScreen extends StatelessWidget {
         crossAxisSpacing: 15,
         childAspectRatio: 1.5,
         children: [
-          _StatCard("Clientes", "${resumen.clientes}", Icons.people, Colors.blue),
-          _StatCard("Repartidores", "${resumen.repartidores}", Icons.local_shipping, Colors.green),
-          _StatCard("Pedidos Hoy", "${resumen.pedidosHoy}", Icons.inventory, Colors.orange),
-          _StatCard("Total Ventas", "\$${resumen.ventas}", Icons.attach_money, Colors.black),
+          _StatCard("Clientes", "$clientes", Icons.people, Colors.blue),
+          _StatCard(
+            "Repartidores",
+            "$repartidores",
+            Icons.local_shipping,
+            Colors.green,
+          ),
+          _StatCard(
+            "Pedidos Hoy",
+            "$pedidosHoy",
+            Icons.inventory,
+            Colors.orange,
+          ),
+          _StatCard(
+            "Ventas",
+            "\$${ventas.toStringAsFixed(0)}",
+            Icons.attach_money,
+            Colors.black,
+          ),
         ],
       ),
     );
   }
 
+  /// =========================
+  /// PERFORMANCE
+  /// =========================
   Widget _buildPerformance() {
     return _card(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "Rendimiento Semanal",
+            "Rendimiento",
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 15),
-
-          const Text("Pedidos completados"),
-          const SizedBox(height: 5),
+          const SizedBox(height: 10),
           LinearProgressIndicator(
             value: 0.9,
             color: Colors.blue,
             backgroundColor: Colors.grey.shade300,
-          ),
-          const SizedBox(height: 10),
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Text("324/350"),
-          ),
-
-          const SizedBox(height: 15),
-
-          const Text("Tasa de entrega"),
-          const SizedBox(height: 5),
-          LinearProgressIndicator(
-            value: 0.96,
-            color: Colors.green,
-            backgroundColor: Colors.grey.shade300,
-          ),
-          const SizedBox(height: 10),
-          const Align(
-            alignment: Alignment.centerRight,
-            child: Text("96%"),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActiveOrders(List<Pedido> pedidos) {
+  /// =========================
+  /// PEDIDOS ACTIVOS
+  /// =========================
+  Widget _buildActiveOrders() {
     return Column(
       children: [
         const Padding(
@@ -201,14 +197,18 @@ class AdminHomeScreen extends StatelessWidget {
         ),
         const SizedBox(height: 10),
 
-        ...pedidos.map((p) => _orderCard(p)).toList(),
+        ...pedidosActivos.map((p) => _orderCard(p)).toList(),
       ],
     );
   }
 
-  /// 📦 Card dinámico
   Widget _orderCard(Pedido pedido) {
-    Color color = pedido.estado == "En reparto"
+    final cliente = usuarios[pedido.clienteId];
+    final repartidor = pedido.repartidorId != null
+        ? usuarios[pedido.repartidorId!]
+        : null;
+
+    Color color = pedido.estado == EstadoPedido.proceso
         ? Colors.orange
         : Colors.blue;
 
@@ -219,32 +219,30 @@ class AdminHomeScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(pedido.id, style: const TextStyle(color: Colors.grey)),
+              Text("#${pedido.id}", style: const TextStyle(color: Colors.grey)),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Text(
-                  pedido.estado,
-                  style: TextStyle(color: color),
-                ),
-              )
+                child: Text(pedido.estado.name, style: TextStyle(color: color)),
+              ),
             ],
           ),
           const SizedBox(height: 5),
 
           Text(
-            pedido.cliente,
+            cliente?.nombre ?? "Cliente",
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
 
           const SizedBox(height: 5),
 
-          /// 🚚 Repartidor
-          Text("Repartidor: ${pedido.repartidor}"),
+          Text("Repartidor: ${repartidor?.nombre ?? "Sin asignar"}"),
         ],
       ),
     );
@@ -254,18 +252,10 @@ class AdminHomeScreen extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Container(
-        width: double.infinity,
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
         child: child,
       ),
@@ -273,6 +263,9 @@ class AdminHomeScreen extends StatelessWidget {
   }
 }
 
+/// =========================
+/// STAT CARD
+/// =========================
 class _StatCard extends StatelessWidget {
   final String title;
   final String value;
@@ -288,12 +281,6 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
