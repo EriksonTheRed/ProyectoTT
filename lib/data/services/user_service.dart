@@ -1,111 +1,111 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 
 class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  final String collection = 'users';
-
-  /// =========================
-  /// USUARIO ACTUAL
-  /// =========================
-  Future<Usuario?> getCurrentUserData() async {
-    try {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) return null;
-
-      final doc = await _firestore.collection(collection).doc(uid).get();
-
-      if (!doc.exists) return null;
-
-      return Usuario.fromMap(doc.data()!);
-    } catch (_) {
-      return null;
-    }
-  }
+  final String _collection = 'users';
 
   /// =========================
   /// OBTENER USUARIO POR ID
   /// =========================
   Future<Usuario?> getUserById(String uid) async {
-    try {
-      final doc = await _firestore.collection(collection).doc(uid).get();
+    final doc = await _firestore.collection(_collection).doc(uid).get();
 
-      if (!doc.exists) return null;
+    if (!doc.exists) return null;
 
-      return Usuario.fromMap(doc.data()!);
-    } catch (_) {
-      return null;
-    }
+    return Usuario.fromMap(doc.data()!);
   }
 
   /// =========================
   /// OBTENER USUARIOS POR ROL
   /// =========================
-  Future<List<Usuario>> getUsersByRole(String rol) async {
+  Future<List<Usuario>> getUsersByRole(String role) async {
     final snapshot = await _firestore
-        .collection(collection)
-        .where('rol', isEqualTo: rol)
+        .collection(_collection)
+        .where('rol', isEqualTo: role)
+        .where('activo', isEqualTo: true)
         .get();
 
     return snapshot.docs.map((doc) => Usuario.fromMap(doc.data())).toList();
+  }
+
+  /// =========================
+  /// OBTENER CLIENTES
+  /// =========================
+  Future<List<Usuario>> getClients() async {
+    return getUsersByRole('cliente');
+  }
+
+  /// =========================
+  /// OBTENER ADMINISTRADORES
+  /// =========================
+  Future<List<Usuario>> getAdmins() async {
+    return getUsersByRole('admin');
   }
 
   /// =========================
   /// OBTENER REPARTIDORES
   /// =========================
-  Future<List<Usuario>> getRepartidores() async {
+  Future<List<Usuario>> getDeliveryUsers() async {
+    return getUsersByRole('repartidor');
+  }
+
+  /// =========================
+  /// OBTENER REPARTIDORES DISPONIBLES
+  /// =========================
+  Future<List<Usuario>> getAvailableDeliveryUsers() async {
     final snapshot = await _firestore
-        .collection(collection)
+        .collection(_collection)
         .where('rol', isEqualTo: 'repartidor')
+        .where('activo', isEqualTo: true)
+        .where('disponible', isEqualTo: true)
         .get();
 
     return snapshot.docs.map((doc) => Usuario.fromMap(doc.data())).toList();
   }
 
   /// =========================
-  /// ACTUALIZAR PERFIL
+  /// ACTUALIZAR PERFIL BASICO
   /// =========================
-  Future<String?> updateUserProfile({
+  Future<void> updateUserProfile({
     required String uid,
-    String? nombre,
-    String? telefono,
-    String? direccion,
+    String? name,
+    String? phone,
+    String? address,
   }) async {
-    try {
-      final data = <String, dynamic>{};
+    final data = <String, dynamic>{};
 
-      if (nombre != null) data['nombre'] = nombre;
-      if (telefono != null) data['telefono'] = telefono;
-      if (direccion != null) data['direccion'] = direccion;
+    if (name != null) data['nombre'] = name;
+    if (phone != null) data['telefono'] = phone;
+    if (address != null) data['direccion'] = address;
 
-      if (data.isEmpty) return "No hay datos para actualizar";
+    if (data.isEmpty) return;
 
-      await _firestore.collection(collection).doc(uid).update(data);
-
-      return null;
-    } catch (_) {
-      return "Error al actualizar perfil";
-    }
+    await _firestore.collection(_collection).doc(uid).update(data);
   }
 
   /// =========================
-  /// ACTIVAR / DESACTIVAR USUARIO
+  /// CAMBIAR ESTADO ACTIVO
   /// =========================
-  Future<String?> setUserActive({
+  Future<void> updateUserActiveStatus({
     required String uid,
-    required bool activo,
+    required bool isActive,
   }) async {
-    try {
-      await _firestore.collection(collection).doc(uid).update({
-        'activo': activo,
-      });
+    await _firestore.collection(_collection).doc(uid).update({
+      'activo': isActive,
+    });
+  }
 
-      return null;
-    } catch (_) {
-      return "Error al actualizar estado";
-    }
+  /// =========================
+  /// CAMBIAR DISPONIBILIDAD (REPARTIDOR)
+  /// =========================
+  Future<void> updateDeliveryAvailability({
+    required String uid,
+    required bool isAvailable,
+  }) async {
+    await _firestore.collection(_collection).doc(uid).update({
+      'disponible': isAvailable,
+    });
   }
 }

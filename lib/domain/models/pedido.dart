@@ -39,19 +39,32 @@ class Pedido {
   /// =========================
   factory Pedido.fromMap(Map<String, dynamic> map) {
     return Pedido(
-      id: map['id'],
-      clienteId: map['id_cliente'],
-      repartidorId: map['id_repartidor'],
-      estado: _estadoFromString(map['estado']),
-      direccionEntrega: map['direccion_entrega'],
-      telefono: map['telefono'],
-      cantidad: map['cantidad'],
-      total: (map['total'] as num).toDouble(),
-      ubicacion: map['ubicacion'] is GeoPoint
-          ? map['ubicacion']
-          : const GeoPoint(0, 0),
-      fechaCreacion: (map['fecha_creacion'] as Timestamp?)?.toDate(),
-      fechaEntrega: (map['fecha_entrega'] as Timestamp?)?.toDate(),
+      id: map['id'] as String? ?? '',
+
+      clienteId: map['id_cliente'] as String? ?? '',
+
+      repartidorId: map['id_repartidor'] as String?,
+
+      estado: EstadoPedido.values.firstWhere(
+        (e) => e.name == (map['estado'] as String? ?? 'pendiente'),
+        orElse: () => EstadoPedido.pendiente,
+      ),
+
+      direccionEntrega: map['direccion_entrega'] as String? ?? '',
+      telefono: map['telefono'] as String? ?? '',
+      cantidad: map['cantidad'] as int? ?? 0,
+      total: (map['total'] as num?)?.toDouble() ?? 0.0,
+
+      ubicacion: map['ubicacion'] as GeoPoint,
+
+      // 🔥 FIX CLAVE
+      fechaCreacion: map['fecha_creacion'] != null
+          ? (map['fecha_creacion'] as Timestamp).toDate()
+          : null,
+
+      fechaEntrega: map['fecha_entrega'] != null
+          ? (map['fecha_entrega'] as Timestamp).toDate()
+          : null,
     );
   }
 

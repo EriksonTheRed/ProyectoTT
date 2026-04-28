@@ -4,58 +4,91 @@ import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/delivery_service.dart';
 import 'package:purificadora_app/data/services/user_service.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
 import 'package:intl/intl.dart';
 
 class DriverOrderScreen extends StatefulWidget {
-  final Pedido pedido;
+  final Usuario usuario;
 
-  const DriverOrderScreen({super.key, required this.pedido});
+  const DriverOrderScreen({super.key, required this.usuario});
 
   @override
   State<DriverOrderScreen> createState() => _DriverOrderScreenState();
 }
 
 class _DriverOrderScreenState extends State<DriverOrderScreen> {
-  final DeliveryService _deliveryService = DeliveryService();
+  final DeliveryService _deliveryService = DeliveryService(
+    PedidoService(),
+    UserService(),
+  );
+
   final UserService _userService = UserService();
 
+  Pedido? pedido;
   Usuario? cliente;
+
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadCliente();
+    _loadData();
   }
 
-  Future<void> _loadCliente() async {
-    cliente = await _userService.getUserById(widget.pedido.clienteId);
+  /// =========================
+  /// LOAD DATA
+  /// =========================
+  Future<void> _loadData() async {
+    try {
+      final pedidoActual = await _deliveryService.getPedidoEnCurso(
+        widget.usuario.uid,
+      );
 
-    setState(() {
-      isLoading = false;
-    });
+      if (pedidoActual == null) {
+        setState(() {
+          pedido = null;
+          isLoading = false;
+        });
+        return;
+      }
+
+      final clienteData = await _userService.getUserById(
+        pedidoActual.clienteId,
+      );
+
+      setState(() {
+        pedido = pedidoActual;
+        cliente = clienteData;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("ERROR DRIVER ORDER: $e");
+      setState(() => isLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final pedido = widget.pedido;
+    final p = pedido;
 
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
+          : p == null
+          ? const Center(child: Text("No tienes pedidos activos"))
           : SingleChildScrollView(
               child: Column(
                 children: [
                   _buildHeader(),
                   const SizedBox(height: 20),
-                  _buildStatus(pedido),
+                  _buildStatus(p),
                   const SizedBox(height: 20),
-                  _buildClientInfo(),
+                  _buildClientInfo(p),
                   const SizedBox(height: 20),
-                  _buildOrderDetails(pedido),
+                  _buildOrderDetails(p),
                   const SizedBox(height: 20),
-                  _buildButtons(pedido),
+                  _buildButtons(p),
                   const SizedBox(height: 30),
                 ],
               ),
@@ -92,7 +125,7 @@ class _DriverOrderScreenState extends State<DriverOrderScreen> {
   /// =========================
   /// CLIENTE
   /// =========================
-  Widget _buildClientInfo() {
+  Widget _buildClientInfo(Pedido pedido) {
     return _card(
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,14 +135,11 @@ class _DriverOrderScreenState extends State<DriverOrderScreen> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
-
           Text(
             cliente?.nombre ?? "Cliente",
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
-
           const SizedBox(height: 10),
-
           Row(
             children: [
               const Icon(Icons.phone, color: Colors.blue),
@@ -117,14 +147,12 @@ class _DriverOrderScreenState extends State<DriverOrderScreen> {
               Text(cliente?.telefono ?? "-"),
             ],
           ),
-
           const SizedBox(height: 10),
-
           Row(
             children: [
               const Icon(Icons.location_on, color: Colors.blue),
               const SizedBox(width: 5),
-              Expanded(child: Text(widget.pedido.direccionEntrega)),
+              Expanded(child: Text(pedido.direccionEntrega)),
             ],
           ),
         ],
@@ -149,14 +177,11 @@ class _DriverOrderScreenState extends State<DriverOrderScreen> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [const Text("Fecha:"), Text(fecha)],
           ),
-
           const SizedBox(height: 5),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -164,9 +189,7 @@ class _DriverOrderScreenState extends State<DriverOrderScreen> {
               Text("${pedido.cantidad} unidades"),
             ],
           ),
-
           const SizedBox(height: 5),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -215,15 +238,29 @@ class _DriverOrderScreenState extends State<DriverOrderScreen> {
   /// ACCIONES
   /// =========================
   Future<void> _entregar(String id) async {
-    await _deliveryService.marcarComoEntregado(id);
-    if (!mounted) return;
-    Navigator.pop(context);
+    try {
+      await _deliveryService.marcarComoEntregado(
+        pedidoId: id,
+        repartidorId: widget.usuario.uid,
+      );
+      if (!mounted) return;
+      _loadData();
+    } catch (e) {
+      debugPrint("Error entregar: $e");
+    }
   }
 
   Future<void> _noEntregado(String id) async {
-    await _deliveryService.marcarNoEntregado(id);
-    if (!mounted) return;
-    Navigator.pop(context);
+    try {
+      await _deliveryService.marcarComoNoEntregado(
+        pedidoId: id,
+        repartidorId: widget.usuario.uid,
+      );
+      if (!mounted) return;
+      _loadData();
+    } catch (e) {
+      debugPrint("Error no entregado: $e");
+    }
   }
 
   String _estadoTexto(EstadoPedido estado) {

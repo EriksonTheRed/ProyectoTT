@@ -3,6 +3,7 @@ import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/delivery_service.dart';
 import 'package:purificadora_app/data/services/user_service.dart';
 
 class DriverHomeScreen extends StatefulWidget {
@@ -17,6 +18,10 @@ class DriverHomeScreen extends StatefulWidget {
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
   final PedidoService _pedidoService = PedidoService();
   final UserService _userService = UserService();
+  final DeliveryService _deliveryService = DeliveryService(
+    PedidoService(),
+    UserService(),
+  );
 
   Pedido? pedidoActual;
   Usuario? cliente;
@@ -34,26 +39,47 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
   Future<void> _loadData() async {
     try {
-      final asignados = await _pedidoService.obtenerPedidosAsignados(
+      /// 🔹 Obtener pedidos asignados (en proceso)
+      final asignados = await _deliveryService.getPedidosAsignados(
         widget.usuario.uid,
       );
+
+      Pedido? pedidoTemp;
+      Usuario? clienteTemp;
 
       if (asignados.isNotEmpty) {
-        pedidoActual = asignados.first;
+        pedidoTemp = asignados.first;
 
-        cliente = await _userService.getUserById(pedidoActual!.clienteId);
+        if (pedidoTemp.clienteId.isNotEmpty) {
+          clienteTemp = await _userService.getUserById(pedidoTemp.clienteId);
+        }
       }
 
-      final completados = await _pedidoService.obtenerPedidosCompletadosHoy(
+      /// 🔹 Obtener TODOS los pedidos del repartidor
+      final todos = await _pedidoService.getPedidosByRepartidor(
         widget.usuario.uid,
       );
 
+      /// 🔹 Filtrar completados hoy
+      final now = DateTime.now();
+      final inicioDia = DateTime(now.year, now.month, now.day);
+
+      final completadosHoy = todos.where((p) {
+        return p.estado == EstadoPedido.completado &&
+            p.fechaEntrega != null &&
+            p.fechaEntrega!.isAfter(inicioDia);
+      }).toList();
+
       setState(() {
+        pedidoActual = pedidoTemp;
+        cliente = clienteTemp;
         pendientes = asignados.length;
-        entregadosHoy = completados.length;
+        entregadosHoy = completadosHoy.length;
         isLoading = false;
       });
-    } catch (_) {
+    } catch (e) {
+      print("ERROR DRIVER HOME: $e");
+
       setState(() => isLoading = false);
     }
   }

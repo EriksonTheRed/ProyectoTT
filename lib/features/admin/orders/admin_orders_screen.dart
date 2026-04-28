@@ -3,6 +3,8 @@ import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/data/services/admin_service.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 
 class AdminOrdersScreen extends StatefulWidget {
   const AdminOrdersScreen({super.key});
@@ -12,7 +14,10 @@ class AdminOrdersScreen extends StatefulWidget {
 }
 
 class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
-  final AdminService _adminService = AdminService();
+  final AdminService _adminService = AdminService(
+    PedidoService(),
+    UserService(),
+  );
 
   int selectedFilter = 0;
   final filters = ["Todos", "Pendiente", "En proceso", "Completado"];
@@ -31,25 +36,34 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
 
   Future<void> _loadData() async {
     try {
-      final allPedidos = await _adminService.getAllPedidos();
-      final reps = await _adminService.getUsuariosPorRol("repartidor");
+      /// 🔹 Pedidos (activos en tu arquitectura)
+      final pedidosData = await _adminService.getPedidosActivos();
 
-      /// mapear usuarios
-      for (var p in allPedidos) {
-        if (!usuarios.containsKey(p.clienteId)) {
+      /// 🔹 Repartidores
+      final reps = await _adminService.getRepartidores();
+
+      /// 🔹 Mapear usuarios (clientes + repartidores)
+      final Map<String, Usuario> usuariosTemp = {};
+
+      for (var p in pedidosData) {
+        /// Cliente
+        if (!usuariosTemp.containsKey(p.clienteId)) {
           final user = await _adminService.getUsuarioById(p.clienteId);
-          if (user != null) usuarios[p.clienteId] = user;
+          if (user != null) usuariosTemp[p.clienteId] = user;
         }
 
-        if (p.repartidorId != null && !usuarios.containsKey(p.repartidorId)) {
+        /// Repartidor
+        if (p.repartidorId != null &&
+            !usuariosTemp.containsKey(p.repartidorId)) {
           final user = await _adminService.getUsuarioById(p.repartidorId!);
-          if (user != null) usuarios[p.repartidorId!] = user;
+          if (user != null) usuariosTemp[p.repartidorId!] = user;
         }
       }
 
       setState(() {
-        pedidos = allPedidos;
+        pedidos = pedidosData;
         repartidores = reps;
+        usuarios = usuariosTemp;
         isLoading = false;
       });
     } catch (e) {

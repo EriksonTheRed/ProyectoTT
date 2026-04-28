@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/data/services/client_service.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
 
 class Producto {
@@ -29,7 +30,7 @@ class _OrderScreenState extends State<OrderScreen> {
   int quantity = 1;
   bool isLoading = false;
 
-  final PedidoService _pedidoService = PedidoService();
+  final ClientService _clientService = ClientService(PedidoService());
 
   final producto = Producto(
     nombre: "Garrafón de Agua",
@@ -266,9 +267,19 @@ class _OrderScreenState extends State<OrderScreen> {
           backgroundColor: AppTheme.primaryBlue,
         ),
         onPressed: isLoading ? null : () => _crearPedido(total),
-        icon: const Icon(Icons.water_drop),
+        // ✅ Icono oculto durante carga para que el label centrado se vea bien
+        icon: isLoading
+            ? const SizedBox.shrink()
+            : const Icon(Icons.water_drop),
         label: isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
             : const Text("Confirmar Pedido"),
       ),
     );
@@ -278,7 +289,9 @@ class _OrderScreenState extends State<OrderScreen> {
   /// CREAR PEDIDO
   /// =========================
   Future<void> _crearPedido(double total) async {
-    if (widget.usuario.direccion == null || widget.usuario.direccion!.isEmpty) {
+    final direccion = widget.usuario.direccion;
+
+    if (direccion == null || direccion.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Agrega una dirección primero")),
       );
@@ -287,29 +300,37 @@ class _OrderScreenState extends State<OrderScreen> {
 
     setState(() => isLoading = true);
 
-    final error = await _pedidoService.crearPedido(
-      clienteId: widget.usuario.uid,
-      direccionEntrega: widget.usuario.direccion!,
-      telefono: widget.usuario.telefono,
-      cantidad: quantity,
-      total: total,
-      ubicacion: const GeoPoint(0, 0), // temporal
-    );
+    try {
+      await _clientService.crearPedido(
+        clienteId: widget.usuario.uid,
+        direccionEntrega: direccion,
+        telefono: widget.usuario.telefono,
+        cantidad: quantity,
+        total: total,
+        ubicacion: const GeoPoint(0, 0),
+      );
 
-    setState(() => isLoading = false);
+      // ✅ Verificar mounted antes de usar context tras await
+      if (!mounted) return;
 
-    if (error != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error)));
-      return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pedido creado correctamente")),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      // ✅ Nunca mostrar e.toString() — mensaje genérico amigable
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Ocurrió un error al crear el pedido. Intenta de nuevo.",
+          ),
+        ),
+      );
+    } finally {
+      // ✅ finally garantiza que isLoading se resetea siempre
+      if (mounted) setState(() => isLoading = false);
     }
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Pedido creado correctamente")),
-    );
-
-    Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
   }
 
   /// =========================

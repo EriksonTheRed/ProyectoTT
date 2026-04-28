@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/data/services/admin_service.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 import 'package:purificadora_app/data/services/auth_service.dart';
 
 class AdminUsersScreen extends StatefulWidget {
@@ -13,12 +16,22 @@ class AdminUsersScreen extends StatefulWidget {
 
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final AuthService _authService = AuthService();
-  final AdminService _adminService = AdminService();
+  final AdminService _adminService = AdminService(
+    PedidoService(),
+    UserService(),
+  );
+  final UserService _userService = UserService();
 
   int selectedType = 0;
+  int selectedTab = 0;
 
   List<Usuario> usuarios = [];
   bool isLoading = true;
+
+  String _getRol() {
+    const roles = ['cliente', 'repartidor', 'admin'];
+    return roles[selectedTab];
+  }
 
   final nombreCtrl = TextEditingController();
   final telefonoCtrl = TextEditingController();
@@ -33,22 +46,18 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   }
 
   Future<void> _loadUsers() async {
-    final users = await _adminService.getUsuariosPorRol(_getRol());
+    try {
+      final rol = _getRol();
 
-    setState(() {
-      usuarios = users;
-      isLoading = false;
-    });
-  }
+      final users = await _userService.getUsersByRole(rol);
 
-  String _getRol() {
-    switch (selectedType) {
-      case 0:
-        return "cliente";
-      case 1:
-        return "repartidor";
-      default:
-        return "admin";
+      setState(() {
+        usuarios = users;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Users error: $e");
+      setState(() => isLoading = false);
     }
   }
 

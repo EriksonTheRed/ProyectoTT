@@ -3,6 +3,8 @@ import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/admin_service.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 
 class AdminMonitorScreen extends StatefulWidget {
   const AdminMonitorScreen({super.key});
@@ -12,7 +14,10 @@ class AdminMonitorScreen extends StatefulWidget {
 }
 
 class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
-  final AdminService _adminService = AdminService();
+  final AdminService _adminService = AdminService(
+    PedidoService(),
+    UserService(),
+  );
 
   List<Usuario> repartidores = [];
   List<Pedido> pedidos = [];
@@ -32,28 +37,39 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
 
   Future<void> _loadData() async {
     try {
-      final reps = await _adminService.getRepartidoresConEstado();
+      /// 🔹 Obtener datos base
+      final reps = await _adminService.getRepartidores();
       final orders = await _adminService.getPedidosActivos();
       final resumen = await _adminService.getResumenAdmin();
 
-      /// mapear clientes
+      /// 🔹 Mapear clientes (mejorado)
+      final Map<String, Usuario> clientesTemp = {};
+
       for (var p in orders) {
-        if (!clientes.containsKey(p.clienteId)) {
-          final c = await _adminService.getUsuarioById(p.clienteId);
-          if (c != null) clientes[p.clienteId] = c;
+        final id = p.clienteId;
+
+        if (!clientesTemp.containsKey(id)) {
+          final c = await _adminService.getUsuarioById(id);
+          if (c != null) clientesTemp[id] = c;
         }
       }
 
-      /// stats
-      enRuta = orders.where((p) => p.estado == EstadoPedido.proceso).length;
+      /// 🔹 Stats
+      final enRutaCount = orders
+          .where((p) => p.estado == EstadoPedido.proceso)
+          .length;
 
-      activos = reps.where((r) => r.disponible == true).length;
-
-      entregasHoy = resumen['pedidosHoy'] ?? 0;
+      final activosCount = reps.where((r) => r.disponible == true).length;
 
       setState(() {
         repartidores = reps;
         pedidos = orders;
+        clientes = clientesTemp;
+
+        enRuta = enRutaCount;
+        activos = activosCount;
+        entregasHoy = resumen['pedidosHoy'] ?? 0;
+
         isLoading = false;
       });
     } catch (e) {

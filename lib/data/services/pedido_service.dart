@@ -3,12 +3,13 @@ import 'package:purificadora_app/domain/models/pedido.dart';
 
 class PedidoService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String collection = 'orders';
+
+  final String _collection = 'orders';
 
   /// =========================
-  /// CREAR PEDIDO (CLIENTE)
+  /// CREAR PEDIDO
   /// =========================
-  Future<String?> crearPedido({
+  Future<void> createPedido({
     required String clienteId,
     required String direccionEntrega,
     required String telefono,
@@ -16,50 +17,76 @@ class PedidoService {
     required double total,
     required GeoPoint ubicacion,
   }) async {
-    try {
-      if (cantidad <= 0) return "Cantidad inválida";
-
-      final doc = _firestore.collection(collection).doc();
-
-      final pedido = Pedido(
-        id: doc.id,
-        clienteId: clienteId,
-        repartidorId: null,
-        estado: EstadoPedido.pendiente,
-        direccionEntrega: direccionEntrega,
-        telefono: telefono,
-        cantidad: cantidad,
-        total: total,
-        ubicacion: ubicacion,
-        fechaCreacion: DateTime.now(),
-        fechaEntrega: null,
-      );
-
-      await doc.set(pedido.toMap());
-
-      return null;
-    } catch (_) {
-      return "Error al crear pedido";
+    if (cantidad <= 0) {
+      throw Exception('Cantidad inválida');
     }
+
+    final doc = _firestore.collection(_collection).doc();
+
+    final pedido = Pedido(
+      id: doc.id,
+      clienteId: clienteId,
+      repartidorId: null,
+      estado: EstadoPedido.pendiente,
+      direccionEntrega: direccionEntrega,
+      telefono: telefono,
+      cantidad: cantidad,
+      total: total,
+      ubicacion: ubicacion,
+      fechaCreacion: DateTime.now(),
+      fechaEntrega: null,
+    );
+
+    await doc.set(pedido.toMap());
   }
 
-  Future<List<Pedido>> obtenerPedidosPorRepartidor(String repartidorId) async {
+  /// =========================
+  /// OBTENER PEDIDO POR ID
+  /// =========================
+  Future<Pedido?> getPedidoById(String pedidoId) async {
+    final doc = await _firestore.collection(_collection).doc(pedidoId).get();
+
+    if (!doc.exists) return null;
+
+    return Pedido.fromMap(doc.data()!);
+  }
+
+  /// =========================
+  /// OBTENER PEDIDOS POR CLIENTE
+  /// =========================
+  Future<List<Pedido>> getPedidosByCliente(String clienteId) async {
     final snapshot = await _firestore
-        .collection(collection)
-        .where('id_repartidor', isEqualTo: repartidorId)
-        .orderBy('fecha_creacion', descending: true) // 👈 más seguro
+        .collection(_collection)
+        .where('id_cliente', isEqualTo: clienteId)
+        .orderBy('fecha_creacion', descending: true)
         .get();
 
-    return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+
+      return Pedido.fromMap({
+        'id': data['id'],
+        'clienteId': data['id_cliente'],
+        'repartidorId': data['id_repartidor'],
+        'estado': data['estado'],
+        'direccionEntrega': data['direccion_entrega'],
+        'telefono': data['telefono'],
+        'cantidad': data['cantidad'],
+        'total': data['total'],
+        'ubicacion': data['ubicacion'],
+        'fechaCreacion': data['fecha_creacion'],
+        'fechaEntrega': data['fecha_entrega'],
+      });
+    }).toList();
   }
 
   /// =========================
-  /// OBTENER PEDIDOS CLIENTE
+  /// OBTENER PEDIDOS POR REPARTIDOR
   /// =========================
-  Future<List<Pedido>> obtenerPedidosCliente(String clienteId) async {
+  Future<List<Pedido>> getPedidosByRepartidor(String repartidorId) async {
     final snapshot = await _firestore
-        .collection(collection)
-        .where('id_cliente', isEqualTo: clienteId)
+        .collection(_collection)
+        .where('id_repartidor', isEqualTo: repartidorId)
         .orderBy('fecha_creacion', descending: true)
         .get();
 
@@ -67,11 +94,11 @@ class PedidoService {
   }
 
   /// =========================
-  /// OBTENER PEDIDOS DISPONIBLES (ADMIN)
+  /// OBTENER PEDIDOS PENDIENTES
   /// =========================
-  Future<List<Pedido>> obtenerPedidosPendientes() async {
+  Future<List<Pedido>> getPedidosPendientes() async {
     final snapshot = await _firestore
-        .collection(collection)
+        .collection(_collection)
         .where('estado', isEqualTo: EstadoPedido.pendiente.name)
         .get();
 
@@ -79,154 +106,54 @@ class PedidoService {
   }
 
   /// =========================
-  /// ASIGNAR REPARTIDOR (ADMIN)
+  /// ASIGNAR REPARTIDOR (SOLO DATA, SIN VALIDACIONES DE ROL)
   /// =========================
-  Future<String?> asignarRepartidor({
+  Future<void> assignRepartidor({
     required String pedidoId,
     required String repartidorId,
   }) async {
-    try {
-      final pedidoRef = _firestore.collection(collection).doc(pedidoId);
-      final pedidoDoc = await pedidoRef.get();
+    final pedidoRef = _firestore.collection(_collection).doc(pedidoId);
 
-      if (!pedidoDoc.exists) return "Pedido no encontrado";
-
-      final pedido = Pedido.fromMap(pedidoDoc.data()!);
-
-      if (pedido.estado != EstadoPedido.pendiente) {
-        return "El pedido no está disponible";
-      }
-
-      /// 🔥 Validar disponibilidad del repartidor
-      final repartidorDoc = await _firestore
-          .collection('users')
-          .doc(repartidorId)
-          .get();
-
-      if (!repartidorDoc.exists) return "Repartidor no existe";
-
-      if (repartidorDoc['disponible'] != true) {
-        return "Repartidor no disponible";
-      }
-
-      /// 🔥 Actualizar pedido
-      final actualizado = pedido.copyWith(
-        repartidorId: repartidorId,
-        estado: EstadoPedido.proceso,
-      );
-
-      await pedidoRef.update(actualizado.toMap());
-
-      /// 🔥 Marcar repartidor ocupado
-      await _firestore.collection('users').doc(repartidorId).update({
-        'disponible': false,
-      });
-
-      return null;
-    } catch (_) {
-      return "Error al asignar repartidor";
-    }
+    await pedidoRef.update({
+      'id_repartidor': repartidorId,
+      'estado': EstadoPedido.proceso.name,
+    });
   }
 
   /// =========================
-  /// ACTUALIZAR ESTADO
+  /// ACTUALIZAR ESTADO DEL PEDIDO
   /// =========================
-  Future<String?> actualizarEstado({
+  Future<void> updateEstado({
     required String pedidoId,
     required EstadoPedido nuevoEstado,
   }) async {
-    try {
-      final pedidoRef = _firestore.collection(collection).doc(pedidoId);
-      final doc = await pedidoRef.get();
+    final pedidoRef = _firestore.collection(_collection).doc(pedidoId);
+    final doc = await pedidoRef.get();
 
-      if (!doc.exists) return "Pedido no encontrado";
-
-      final pedido = Pedido.fromMap(doc.data()!);
-
-      if (!_transicionValida(pedido.estado, nuevoEstado)) {
-        return "Transición inválida";
-      }
-
-      final actualizado = pedido.copyWith(estado: nuevoEstado);
-
-      await pedidoRef.update({'estado': actualizado.estado.name});
-
-      return null;
-    } catch (_) {
-      return "Error al actualizar estado";
+    if (!doc.exists) {
+      throw Exception('Pedido no encontrado');
     }
+
+    final pedido = Pedido.fromMap(doc.data()!);
+
+    if (!_isValidTransition(pedido.estado, nuevoEstado)) {
+      throw Exception('Transición inválida');
+    }
+
+    final updateData = <String, dynamic>{'estado': nuevoEstado.name};
+
+    /// Si se completa, registrar fecha de entrega
+    if (nuevoEstado == EstadoPedido.completado) {
+      updateData['fecha_entrega'] = DateTime.now();
+    }
+
+    await pedidoRef.update(updateData);
   }
 
   /// =========================
-  /// CONFIRMAR ENTREGA (ADMIN)
+  /// VALIDAR TRANSICIONES
   /// =========================
-  Future<String?> confirmarEntrega(String pedidoId) async {
-    try {
-      final pedidoRef = _firestore.collection(collection).doc(pedidoId);
-      final doc = await pedidoRef.get();
-
-      if (!doc.exists) return "Pedido no encontrado";
-
-      final pedido = Pedido.fromMap(doc.data()!);
-
-      if (pedido.estado != EstadoPedido.proceso) {
-        return "El pedido no está en proceso";
-      }
-
-      final actualizado = pedido.copyWith(
-        estado: EstadoPedido.completado,
-        fechaEntrega: DateTime.now(),
-      );
-
-      await pedidoRef.update({
-        'estado': actualizado.estado.name,
-        'fecha_entrega': FieldValue.serverTimestamp(),
-      });
-
-      /// 🔥 Liberar repartidor
-      if (pedido.repartidorId != null) {
-        await _firestore.collection('users').doc(pedido.repartidorId).update({
-          'disponible': true,
-        });
-      }
-
-      return null;
-    } catch (_) {
-      return "Error al confirmar entrega";
-    }
-  }
-
-  /// =========================
-  /// CANCELAR PEDIDO
-  /// =========================
-  Future<String?> cancelarPedido(String pedidoId) async {
-    try {
-      final pedidoRef = _firestore.collection(collection).doc(pedidoId);
-      final doc = await pedidoRef.get();
-
-      if (!doc.exists) return "Pedido no encontrado";
-
-      final pedido = Pedido.fromMap(doc.data()!);
-
-      await pedidoRef.update({'estado': EstadoPedido.cancelado.name});
-
-      /// 🔥 Liberar repartidor si aplica
-      if (pedido.repartidorId != null) {
-        await _firestore.collection('users').doc(pedido.repartidorId).update({
-          'disponible': true,
-        });
-      }
-
-      return null;
-    } catch (_) {
-      return "Error al cancelar pedido";
-    }
-  }
-
-  /// =========================
-  /// VALIDACIÓN DE TRANSICIONES
-  /// =========================
-  bool _transicionValida(EstadoPedido actual, EstadoPedido nuevo) {
+  bool _isValidTransition(EstadoPedido actual, EstadoPedido nuevo) {
     const transiciones = {
       EstadoPedido.pendiente: [EstadoPedido.proceso, EstadoPedido.cancelado],
       EstadoPedido.proceso: [EstadoPedido.completado, EstadoPedido.cancelado],
@@ -235,60 +162,5 @@ class PedidoService {
     };
 
     return transiciones[actual]?.contains(nuevo) ?? false;
-  }
-
-  Future<List<Pedido>> obtenerPedidosAsignados(String repartidorId) async {
-    final snapshot = await _firestore
-        .collection(collection)
-        .where('id_repartidor', isEqualTo: repartidorId)
-        .where('estado', isEqualTo: EstadoPedido.proceso.name)
-        .get();
-
-    return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();
-  }
-
-  Future<List<Pedido>> obtenerPedidosCompletadosHoy(String repartidorId) async {
-    final hoy = DateTime.now();
-
-    final inicioDia = DateTime(hoy.year, hoy.month, hoy.day);
-
-    final snapshot = await _firestore
-        .collection(collection)
-        .where('id_repartidor', isEqualTo: repartidorId)
-        .where('estado', isEqualTo: EstadoPedido.completado.name)
-        .where('fecha_entrega', isGreaterThanOrEqualTo: inicioDia)
-        .get();
-
-    return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();
-  }
-
-  Future<Map<String, int>> obtenerEstadisticasRepartidor(
-    String repartidorId,
-  ) async {
-    final snapshot = await _firestore
-        .collection(collection)
-        .where('id_repartidor', isEqualTo: repartidorId)
-        .where('estado', isEqualTo: EstadoPedido.completado.name)
-        .get();
-
-    int semana = 0;
-    int mes = 0;
-    int total = snapshot.docs.length;
-
-    final now = DateTime.now();
-
-    for (var doc in snapshot.docs) {
-      final pedido = Pedido.fromMap(doc.data());
-      final fecha = pedido.fechaEntrega;
-
-      if (fecha == null) continue;
-
-      final diferencia = now.difference(fecha).inDays;
-
-      if (diferencia <= 7) semana++;
-      if (fecha.month == now.month && fecha.year == now.year) mes++;
-    }
-
-    return {'semana': semana, 'mes': mes, 'total': total};
   }
 }

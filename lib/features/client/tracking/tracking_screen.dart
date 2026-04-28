@@ -3,12 +3,18 @@ import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/client_service.dart';
 import 'package:purificadora_app/data/services/user_service.dart';
 
 class TrackingScreen extends StatefulWidget {
   final Usuario usuario;
+  final Pedido pedido;
 
-  const TrackingScreen({super.key, required this.usuario});
+  const TrackingScreen({
+    super.key,
+    required this.usuario,
+    required this.pedido,
+  });
 
   @override
   State<TrackingScreen> createState() => _TrackingScreenState();
@@ -17,6 +23,7 @@ class TrackingScreen extends StatefulWidget {
 class _TrackingScreenState extends State<TrackingScreen> {
   final PedidoService _pedidoService = PedidoService();
   final UserService _userService = UserService();
+  final ClientService _clientService = ClientService(PedidoService());
 
   Pedido? pedido;
   Usuario? repartidor;
@@ -30,20 +37,28 @@ class _TrackingScreenState extends State<TrackingScreen> {
 
   Future<void> _loadTracking() async {
     try {
-      final pedidos = await _pedidoService.obtenerPedidosCliente(
-        widget.usuario.uid,
-      );
+      final pedidos = await _clientService.getMyPedidos(widget.usuario.uid);
 
-      pedido = pedidos.firstWhere(
-        (p) =>
-            p.estado == EstadoPedido.pendiente ||
-            p.estado == EstadoPedido.proceso,
-      );
+      Pedido? pedidoEncontrado;
 
-      if (pedido!.repartidorId != null) {
-        repartidor = await _userService.getUserById(pedido!.repartidorId!);
+      for (var p in pedidos) {
+        if (p.estado == EstadoPedido.pendiente ||
+            p.estado == EstadoPedido.proceso) {
+          pedidoEncontrado = p;
+          break;
+        }
       }
-    } catch (_) {
+
+      if (pedidoEncontrado != null) {
+        pedido = pedidoEncontrado;
+
+        if (pedido!.repartidorId != null) {
+          repartidor = await _userService.getUserById(pedido!.repartidorId!);
+        }
+      } else {
+        pedido = null;
+      }
+    } catch (e) {
       pedido = null;
     }
 

@@ -3,6 +3,8 @@ import '../../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/data/services/admin_service.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -12,7 +14,10 @@ class AdminHomeScreen extends StatefulWidget {
 }
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
-  final AdminService _adminService = AdminService();
+  final AdminService _adminService = AdminService(
+    PedidoService(),
+    UserService(),
+  );
 
   int clientes = 0;
   int repartidores = 0;

@@ -1,137 +1,128 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 
 class DeliveryService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final PedidoService _pedidoService;
+  final UserService _userService;
 
-  final String userCollection = 'users';
-  final String orderCollection = 'orders';
+  DeliveryService(this._pedidoService, this._userService);
 
   /// =========================
-  /// OBTENER REPARTIDOR ACTUAL
+  /// OBTENER REPARTIDOR POR ID
   /// =========================
-  Future<Usuario?> getCurrentDelivery() async {
-    try {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) return null;
+  Future<Usuario?> getDeliveryById(String uid) async {
+    final user = await _userService.getUserById(uid);
 
-      final doc = await _firestore.collection(userCollection).doc(uid).get();
+    if (user == null) return null;
 
-      if (!doc.exists) return null;
-
-      return Usuario.fromMap(doc.data()!);
-    } catch (_) {
-      return null;
+    if (user.rol != 'repartidor') {
+      throw Exception('El usuario no es repartidor');
     }
+
+    return user;
   }
 
   /// =========================
   /// CAMBIAR DISPONIBILIDAD
   /// =========================
-  Future<String?> setDisponibilidad(bool disponible) async {
-    try {
-      final uid = _auth.currentUser?.uid;
-      if (uid == null) return "Usuario no autenticado";
+  Future<void> updateDisponibilidad({
+    required String repartidorId,
+    required bool disponible,
+  }) async {
+    final user = await getDeliveryById(repartidorId);
 
-      await _firestore.collection(userCollection).doc(uid).update({
-        'disponible': disponible,
-      });
-
-      return null;
-    } catch (_) {
-      return "Error al actualizar disponibilidad";
+    if (user == null) {
+      throw Exception('Repartidor no encontrado');
     }
+
+    await _userService.updateDeliveryAvailability(
+      uid: repartidorId,
+      isAvailable: disponible,
+    );
   }
 
   /// =========================
-  /// OBTENER REPARTIDORES DISPONIBLES
+  /// OBTENER PEDIDOS ASIGNADOS (EN PROCESO)
   /// =========================
-  Future<List<Usuario>> getRepartidoresDisponibles() async {
-    final snapshot = await _firestore
-        .collection(userCollection)
-        .where('rol', isEqualTo: 'repartidor')
-        .where('disponible', isEqualTo: true)
-        .get();
+  Future<List<Pedido>> getPedidosAsignados(String repartidorId) async {
+    final pedidos = await _pedidoService.getPedidosByRepartidor(repartidorId);
 
-    return snapshot.docs.map((doc) => Usuario.fromMap(doc.data())).toList();
+    return pedidos.where((p) => p.estado == EstadoPedido.proceso).toList();
   }
 
   /// =========================
-  /// PEDIDOS ASIGNADOS AL REPARTIDOR
+  /// OBTENER PEDIDO EN CURSO
   /// =========================
-  Future<List<Pedido>> getPedidosAsignados() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return [];
-
-    final snapshot = await _firestore
-        .collection(orderCollection)
-        .where('id_repartidor', isEqualTo: uid)
-        .where('estado', isEqualTo: EstadoPedido.proceso.name)
-        .get();
-
-    return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();
-  }
-
-  /// =========================
-  /// OBTENER PEDIDO EN CURSO (UNO)
-  /// =========================
-  Future<Pedido?> getPedidoEnCurso() async {
-    final pedidos = await getPedidosAsignados();
+  Future<Pedido?> getPedidoEnCurso(String repartidorId) async {
+    final pedidos = await getPedidosAsignados(repartidorId);
 
     if (pedidos.isEmpty) return null;
 
-    /// 🔥 Asumimos solo uno activo
+    /// Regla: solo uno activo
     return pedidos.first;
   }
 
   /// =========================
   /// MARCAR COMO ENTREGADO
   /// =========================
-  Future<String?> marcarComoEntregado(String pedidoId) async {
-    try {
-      final pedidoRef = _firestore.collection(orderCollection).doc(pedidoId);
-      final doc = await pedidoRef.get();
+  Future<void> marcarComoEntregado({
+    required String pedidoId,
+    required String repartidorId,
+  }) async {
+    final pedido = await _pedidoService.getPedidoById(pedidoId);
 
-      if (!doc.exists) return "Pedido no encontrado";
-
-      final pedido = Pedido.fromMap(doc.data()!);
-
-      if (pedido.estado != EstadoPedido.proceso) {
-        return "El pedido no está en proceso";
-      }
-
-      /// 🔥 Solo cambia estado (admin confirma después)
-      await pedidoRef.update({'estado': EstadoPedido.proceso.name});
-
-      return null;
-    } catch (_) {
-      return "Error al marcar entrega";
+    if (pedido == null) {
+      throw Exception('Pedido no encontrado');
     }
+
+    /// Validar propiedad
+    if (pedido.repartidorId != repartidorId) {
+      throw Exception('No autorizado');
+    }
+
+    /// Delegar transición al core
+    await _pedidoService.updateEstado(
+      pedidoId: pedidoId,
+      nuevoEstado: EstadoPedido.completado,
+    );
+
+    /// Liberar repartidor
+    await _userService.updateDeliveryAvailability(
+      uid: repartidorId,
+      isAvailable: true,
+    );
   }
 
   /// =========================
   /// MARCAR COMO NO ENTREGADO
   /// =========================
-  Future<String?> marcarNoEntregado(String pedidoId) async {
-    try {
-      final pedidoRef = _firestore.collection(orderCollection).doc(pedidoId);
+  Future<void> marcarComoNoEntregado({
+    required String pedidoId,
+    required String repartidorId,
+  }) async {
+    final pedido = await _pedidoService.getPedidoById(pedidoId);
 
-      await pedidoRef.update({'estado': EstadoPedido.cancelado.name});
-
-      /// 🔥 Liberar repartidor
-      final uid = _auth.currentUser?.uid;
-      if (uid != null) {
-        await _firestore.collection(userCollection).doc(uid).update({
-          'disponible': true,
-        });
-      }
-
-      return null;
-    } catch (_) {
-      return "Error al marcar como no entregado";
+    if (pedido == null) {
+      throw Exception('Pedido no encontrado');
     }
+
+    /// Validar propiedad
+    if (pedido.repartidorId != repartidorId) {
+      throw Exception('No autorizado');
+    }
+
+    /// Cancelar pedido (transición válida)
+    await _pedidoService.updateEstado(
+      pedidoId: pedidoId,
+      nuevoEstado: EstadoPedido.cancelado,
+    );
+
+    /// Liberar repartidor
+    await _userService.updateDeliveryAvailability(
+      uid: repartidorId,
+      isAvailable: true,
+    );
   }
 }

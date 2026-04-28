@@ -4,6 +4,7 @@ import '../../features/client/orders/order_screen.dart';
 import '../../features/client/history/history_screen.dart';
 import '../../features/client/profile/profile_screen.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/features/client/tracking/tracking_screen.dart';
 
 class ClientNavigation extends StatefulWidget {
   final Usuario usuario;

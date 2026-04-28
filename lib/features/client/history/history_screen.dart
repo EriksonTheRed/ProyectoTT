@@ -3,6 +3,7 @@ import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/client_service.dart';
 import 'package:intl/intl.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -15,7 +16,7 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  final PedidoService _pedidoService = PedidoService();
+  final ClientService _clientService = ClientService(PedidoService());
 
   List<Pedido> pedidos = [];
   bool isLoading = true;
@@ -30,9 +31,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     try {
       print("UID: ${widget.usuario.uid}");
 
-      final result = await _pedidoService.obtenerPedidosCliente(
-        widget.usuario.uid,
-      );
+      final result = await _clientService.getMyPedidos(widget.usuario.uid);
 
       print("Pedidos obtenidos: ${result.length}");
 

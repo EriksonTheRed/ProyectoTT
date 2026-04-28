@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:purificadora_app/features/client/tracking/tracking_screen.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/navigation/client_navigation.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
+import 'package:purificadora_app/data/services/client_service.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,7 +17,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final PedidoService _pedidoService = PedidoService();
+  late final ClientService _clientService;
 
   Pedido? pedidoActual;
   bool isLoading = true;
@@ -24,28 +25,71 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _clientService = ClientService(PedidoService());
     _loadPedidoActual();
   }
 
+  /// =========================
+  /// LOAD PEDIDO ACTUAL
+  /// =========================
   Future<void> _loadPedidoActual() async {
     try {
-      final pedidos = await _pedidoService.obtenerPedidosCliente(
-        widget.usuario.uid,
-      );
+      final pedidos = await _clientService.getMyPedidos(widget.usuario.uid);
 
-      pedidoActual = pedidos.firstWhere(
+      // 🔍 DEBUG AQUÍ
+      print("TOTAL PEDIDOS: ${pedidos.length}");
+
+      for (var p in pedidos) {
+        print("Pedido: ${p.id}");
+        print("Estado: ${p.estado}");
+        print("Tipo estado: ${p.estado.runtimeType}");
+        print("--------------------");
+      }
+
+      final activos = pedidos.where(
         (p) =>
             p.estado == EstadoPedido.pendiente ||
             p.estado == EstadoPedido.proceso,
-        orElse: () => null as Pedido,
       );
-    } catch (_) {
+
+      print("PEDIDOS ACTIVOS: ${activos.length}");
+
+      pedidoActual = activos.isNotEmpty ? activos.first : null;
+    } catch (e) {
+      debugPrint("Error cargando pedido: $e");
       pedidoActual = null;
     }
+
+    if (!mounted) return;
 
     setState(() {
       isLoading = false;
     });
+  }
+
+  /// =========================
+  /// NAVIGAR A TRACKING
+  /// =========================
+  void navegarTracking() {
+    if (isLoading) return;
+
+    if (pedidoActual == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("No tienes ningún pedido activo en este momento."),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            TrackingScreen(usuario: widget.usuario, pedido: pedidoActual!),
+      ),
+    );
   }
 
   @override
@@ -59,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             _buildHeader(usuario),
             const SizedBox(height: 20),
-            _buildActionCards(context),
+            _buildActionCards(),
             const SizedBox(height: 20),
             _buildCurrentOrderCard(),
             const SizedBox(height: 30),
@@ -114,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// =========================
   /// ACTION CARDS
   /// =========================
-  Widget _buildActionCards(BuildContext context) {
+  Widget _buildActionCards() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -132,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
             title: "Seguimiento",
             subtitle: "Rastrea tu pedido actual",
             color: Colors.teal,
-            onTap: () => widget.onNavigate?.call(1),
+            onTap: navegarTracking, // ✅ FIX
           ),
           const SizedBox(height: 15),
           _ActionCard(
@@ -193,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: () => widget.onNavigate?.call(1),
+              onTap: navegarTracking, // ✅ FIX CRÍTICO
               child: const Text(
                 "Ver seguimiento →",
                 style: TextStyle(
@@ -210,7 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 /// =========================
-/// ACTION CARD WIDGET
+/// ACTION CARD
 /// =========================
 class _ActionCard extends StatelessWidget {
   final IconData icon;

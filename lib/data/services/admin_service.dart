@@ -1,179 +1,158 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
 
 class AdminService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final PedidoService _pedidoService;
+  final UserService _userService;
 
-  final String userCollection = 'users';
-  final String orderCollection = 'orders';
-
-  /// =========================
-  /// OBTENER TODOS LOS PEDIDOS
-  /// =========================
-  Future<List<Pedido>> getAllPedidos() async {
-    final snapshot = await _firestore.collection(orderCollection).get();
-
-    return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();
-  }
+  AdminService(this._pedidoService, this._userService);
 
   /// =========================
-  /// PEDIDOS POR ESTADO
+  /// ASIGNAR REPARTIDOR A PEDIDO
   /// =========================
-  Future<List<Pedido>> getPedidosByEstado(String estado) async {
-    final snapshot = await _firestore
-        .collection(orderCollection)
-        .where('estado', isEqualTo: estado)
-        .get();
+  Future<void> asignarRepartidor({
+    required String pedidoId,
+    required String repartidorId,
+  }) async {
+    final pedido = await _pedidoService.getPedidoById(pedidoId);
 
-    return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();
-  }
-
-  /// =========================
-  /// USUARIOS POR ROL
-  /// =========================
-  Future<List<Usuario>> getUsuariosPorRol(String rol) async {
-    final snapshot = await _firestore
-        .collection(userCollection)
-        .where('rol', isEqualTo: rol)
-        .get();
-
-    return snapshot.docs.map((doc) => Usuario.fromMap(doc.data())).toList();
-  }
-
-  /// =========================
-  /// REPARTIDORES CON ESTADO
-  /// =========================
-  Future<List<Usuario>> getRepartidoresConEstado() async {
-    final snapshot = await _firestore
-        .collection(userCollection)
-        .where('rol', isEqualTo: 'repartidor')
-        .get();
-
-    return snapshot.docs.map((doc) => Usuario.fromMap(doc.data())).toList();
-  }
-
-  /// =========================
-  /// MONITOREO GENERAL
-  /// =========================
-  Future<Map<String, dynamic>> getMonitoreo() async {
-    try {
-      final pedidos = await getAllPedidos();
-      final repartidores = await getRepartidoresConEstado();
-
-      return {'pedidos': pedidos, 'repartidores': repartidores};
-    } catch (_) {
-      return {};
+    if (pedido == null) {
+      throw Exception('Pedido no encontrado');
     }
+
+    /// Validar estado
+    if (pedido.estado != EstadoPedido.pendiente) {
+      throw Exception('El pedido no está disponible para asignación');
+    }
+
+    final repartidor = await _userService.getUserById(repartidorId);
+
+    if (repartidor == null) {
+      throw Exception('Repartidor no encontrado');
+    }
+
+    /// Validar rol
+    if (repartidor.rol != 'repartidor') {
+      throw Exception('El usuario no es repartidor');
+    }
+
+    /// Validar disponibilidad
+    if (repartidor.disponible != true) {
+      throw Exception('Repartidor no disponible');
+    }
+
+    /// Asignar pedido
+    await _pedidoService.assignRepartidor(
+      pedidoId: pedidoId,
+      repartidorId: repartidorId,
+    );
+
+    /// Marcar repartidor como ocupado
+    await _userService.updateDeliveryAvailability(
+      uid: repartidorId,
+      isAvailable: false,
+    );
+  }
+
+  /// =========================
+  /// OBTENER PEDIDOS ACTIVOS
+  /// =========================
+  Future<List<Pedido>> getPedidosActivos() async {
+    final pendientes = await _pedidoService.getPedidosPendientes();
+    final enProceso = await _getPedidosEnProceso();
+
+    return [...pendientes, ...enProceso];
+  }
+
+  /// =========================
+  /// PEDIDOS EN PROCESO
+  /// =========================
+  Future<List<Pedido>> _getPedidosEnProceso() async {
+    final repartidores = await _userService.getDeliveryUsers();
+
+    List<Pedido> pedidos = [];
+
+    for (var r in repartidores) {
+      final pedidosRepartidor = await _pedidoService.getPedidosByRepartidor(
+        r.uid,
+      );
+
+      pedidos.addAll(
+        pedidosRepartidor.where((p) => p.estado == EstadoPedido.proceso),
+      );
+    }
+
+    return pedidos;
+  }
+
+  /// =========================
+  /// PEDIDOS DEL DÍA
+  /// =========================
+  Future<List<Pedido>> getPedidosHoy() async {
+    final activos = await getPedidosActivos();
+
+    final now = DateTime.now();
+    final inicioDia = DateTime(now.year, now.month, now.day);
+
+    return activos.where((p) {
+      return p.fechaCreacion != null && p.fechaCreacion!.isAfter(inicioDia);
+    }).toList();
   }
 
   /// =========================
   /// ACTIVAR / DESACTIVAR USUARIO
   /// =========================
-  Future<String?> setUserActivo({
+  Future<void> setUserActivo({
     required String uid,
     required bool activo,
   }) async {
-    try {
-      await _firestore.collection(userCollection).doc(uid).update({
-        'activo': activo,
-      });
-
-      return null;
-    } catch (_) {
-      return "Error al actualizar usuario";
-    }
-  }
-
-  /// =========================
-  /// PEDIDOS ACTIVOS
-  /// =========================
-  Future<List<Pedido>> getPedidosActivos() async {
-    final snapshot = await _firestore
-        .collection(orderCollection)
-        .where(
-          'estado',
-          whereIn: [EstadoPedido.pendiente.name, EstadoPedido.proceso.name],
-        )
-        .get();
-
-    return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();
-  }
-
-  /// =========================
-  /// PEDIDOS HOY
-  /// =========================
-  Future<List<Pedido>> getPedidosHoy() async {
-    final now = DateTime.now();
-    final inicioDia = DateTime(now.year, now.month, now.day);
-
-    final snapshot = await _firestore
-        .collection(orderCollection)
-        .where('fecha_creacion', isGreaterThanOrEqualTo: inicioDia)
-        .get();
-
-    return snapshot.docs.map((doc) => Pedido.fromMap(doc.data())).toList();
-  }
-
-  /// =========================
-  /// ASIGNAR REPARTIDOR
-  /// =========================
-  Future<String?> asignarRepartidor({
-    required String pedidoId,
-    required String repartidorId,
-  }) async {
-    try {
-      await _firestore.collection(orderCollection).doc(pedidoId).update({
-        'id_repartidor': repartidorId,
-        'estado': EstadoPedido.proceso.name,
-      });
-
-      return null;
-    } catch (_) {
-      return "Error al asignar repartidor";
-    }
+    await _userService.updateUserActiveStatus(uid: uid, isActive: activo);
   }
 
   /// =========================
   /// OBTENER USUARIO POR ID
   /// =========================
   Future<Usuario?> getUsuarioById(String uid) async {
-    final doc = await _firestore.collection(userCollection).doc(uid).get();
-
-    if (!doc.exists) return null;
-
-    return Usuario.fromMap(doc.data()!);
+    return await _userService.getUserById(uid);
   }
 
+  /// =========================
+  /// OBTENER REPARTIDORES
+  /// =========================
+  Future<List<Usuario>> getRepartidores() async {
+    return await _userService.getDeliveryUsers();
+  }
+
+  /// =========================
+  /// OBTENER REPARTIDORES DISPONIBLES
+  /// =========================
+  Future<List<Usuario>> getRepartidoresDisponibles() async {
+    return await _userService.getAvailableDeliveryUsers();
+  }
+
+  /// =========================
+  /// RESUMEN ADMIN (DASHBOARD)
+  /// =========================
   Future<Map<String, dynamic>> getResumenAdmin() async {
-    try {
-      final usuariosSnapshot = await _firestore
-          .collection(userCollection)
-          .get();
+    final clientes = await _userService.getClients();
+    final repartidores = await _userService.getDeliveryUsers();
 
-      final pedidos = await getAllPedidos();
-      final pedidosHoy = await getPedidosHoy();
+    final pedidosActivos = await getPedidosActivos();
+    final pedidosHoy = await getPedidosHoy();
 
-      int clientes = 0;
-      int repartidores = 0;
+    double ventas = 0;
 
-      for (var doc in usuariosSnapshot.docs) {
-        final user = Usuario.fromMap(doc.data());
-
-        if (user.rol == 'cliente') clientes++;
-        if (user.rol == 'repartidor') repartidores++;
-      }
-
-      double ventas = pedidos.fold(0, (sum, p) => sum + p.total);
-
-      return {
-        'clientes': clientes,
-        'repartidores': repartidores,
-        'pedidosHoy': pedidosHoy.length,
-        'ventas': ventas,
-      };
-    } catch (_) {
-      return {};
+    for (var p in pedidosActivos) {
+      ventas += p.total;
     }
+
+    return {
+      'clientes': clientes.length,
+      'repartidores': repartidores.length,
+      'pedidosHoy': pedidosHoy.length,
+      'ventas': ventas,
+    };
   }
 }

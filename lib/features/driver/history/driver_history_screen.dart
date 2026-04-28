@@ -4,6 +4,7 @@ import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
 import 'package:purificadora_app/data/services/user_service.dart';
+import 'package:purificadora_app/data/services/delivery_service.dart';
 import 'package:intl/intl.dart';
 
 class DriverHistoryScreen extends StatefulWidget {
@@ -18,6 +19,10 @@ class DriverHistoryScreen extends StatefulWidget {
 class _DriverHistoryScreenState extends State<DriverHistoryScreen> {
   final PedidoService _pedidoService = PedidoService();
   final UserService _userService = UserService();
+  final DeliveryService _deliveryService = DeliveryService(
+    PedidoService(),
+    UserService(),
+  );
 
   List<Pedido> pedidos = [];
   Map<String, Usuario> clientes = {};
@@ -32,25 +37,31 @@ class _DriverHistoryScreenState extends State<DriverHistoryScreen> {
 
   Future<void> _loadData() async {
     try {
-      final result = await _pedidoService.obtenerPedidosPorRepartidor(
+      final result = await _deliveryService.getPedidosAsignados(
         widget.usuario.uid,
       );
 
+      final Map<String, Usuario> clientesTemp = {};
+
       for (var pedido in result) {
-        if (!clientes.containsKey(pedido.clienteId)) {
-          final cliente = await _userService.getUserById(pedido.clienteId);
+        final clienteId = pedido.clienteId;
+
+        if (!clientesTemp.containsKey(clienteId)) {
+          final cliente = await _userService.getUserById(clienteId);
           if (cliente != null) {
-            clientes[pedido.clienteId] = cliente;
+            clientesTemp[clienteId] = cliente;
           }
         }
       }
 
       setState(() {
         pedidos = result;
+        clientes = clientesTemp;
         isLoading = false;
       });
     } catch (e) {
       print("ERROR DRIVER HISTORY: $e");
+
       setState(() {
         isLoading = false;
       });

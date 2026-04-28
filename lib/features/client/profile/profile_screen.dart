@@ -192,12 +192,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () async {
-              await _userService.updateUserProfile(
-                uid: usuario.uid,
-                nombre: nombreController.text,
-                telefono: telefonoController.text,
-                direccion: direccionController.text,
-              );
+              try {
+                await _userService.updateUserProfile(
+                  uid: usuario.uid,
+                  name: nombreController.text,
+                  phone: telefonoController.text,
+                  address: direccionController.text,
+                );
+
+                setState(() {
+                  usuario = usuario.copyWith(
+                    nombre: nombreController.text,
+                    telefono: telefonoController.text,
+                    direccion: direccionController.text,
+                  );
+                });
+
+                Navigator.pop(context);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Perfil actualizado")),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("Error al actualizar perfil")),
+                );
+              }
 
               setState(() {
                 usuario = usuario.copyWith(

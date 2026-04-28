@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
 import 'package:purificadora_app/data/services/auth_service.dart';
+import 'package:purificadora_app/data/services/delivery_service.dart';
+import 'package:purificadora_app/data/services/user_service.dart';
+import 'package:purificadora_app/data/services/admin_service.dart';
 import 'package:purificadora_app/features/auth/login_screen.dart';
 
 class DriverProfileScreen extends StatefulWidget {
@@ -17,6 +21,14 @@ class DriverProfileScreen extends StatefulWidget {
 class _DriverProfileScreenState extends State<DriverProfileScreen> {
   final PedidoService _pedidoService = PedidoService();
   final AuthService _authService = AuthService();
+  final DeliveryService _deliveryService = DeliveryService(
+    PedidoService(),
+    UserService(),
+  );
+  final AdminService _adminService = AdminService(
+    PedidoService(),
+    UserService(),
+  );
 
   int semana = 0;
   int mes = 0;
@@ -31,16 +43,49 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   }
 
   Future<void> _loadStats() async {
-    final stats = await _pedidoService.obtenerEstadisticasRepartidor(
-      widget.usuario.uid,
-    );
+    try {
+      final pedidos = await _pedidoService.getPedidosByRepartidor(
+        widget.usuario.uid,
+      );
 
-    setState(() {
-      semana = stats['semana'] ?? 0;
-      mes = stats['mes'] ?? 0;
-      total = stats['total'] ?? 0;
-      isLoading = false;
-    });
+      final now = DateTime.now();
+
+      final inicioSemana = now.subtract(Duration(days: now.weekday - 1));
+
+      final inicioMes = DateTime(now.year, now.month, 1);
+
+      int semanaCount = 0;
+      int mesCount = 0;
+      int totalCount = 0;
+
+      for (var p in pedidos) {
+        if (p.estado != EstadoPedido.completado) continue;
+
+        totalCount++;
+
+        if (p.fechaEntrega != null) {
+          final fecha = p.fechaEntrega!;
+
+          if (fecha.isAfter(inicioSemana)) {
+            semanaCount++;
+          }
+
+          if (fecha.isAfter(inicioMes)) {
+            mesCount++;
+          }
+        }
+      }
+
+      setState(() {
+        semana = semanaCount;
+        mes = mesCount;
+        total = totalCount;
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("ERROR STATS: $e");
+      setState(() => isLoading = false);
+    }
   }
 
   @override

@@ -4,6 +4,7 @@ import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
+import 'package:purificadora_app/data/services/delivery_service.dart';
 import 'package:purificadora_app/data/services/user_service.dart';
 import 'package:purificadora_app/data/services/tracking_service.dart';
 
@@ -20,6 +21,10 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
   final PedidoService _pedidoService = PedidoService();
   final UserService _userService = UserService();
   final TrackingService _trackingService = TrackingService();
+  final DeliveryService _deliveryService = DeliveryService(
+    PedidoService(),
+    UserService(),
+  );
 
   Pedido? pedido;
   Usuario? cliente;
@@ -40,17 +45,17 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
   Future<void> _loadData() async {
     try {
-      /// 1. Pedido actual
-      final pedidos = await _pedidoService.obtenerPedidosAsignados(
+      /// 1. Pedido actual (correcto)
+      final pedidoActual = await _deliveryService.getPedidoEnCurso(
         widget.usuario.uid,
       );
 
-      if (pedidos.isEmpty) {
+      if (pedidoActual == null) {
         setState(() => isLoading = false);
         return;
       }
 
-      pedido = pedidos.first;
+      pedido = pedidoActual;
 
       /// 2. Cliente
       cliente = await _userService.getUserById(pedido!.clienteId);
@@ -58,8 +63,7 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
       /// 3. Ubicación actual
       origin = await _trackingService.getCurrentLocation();
 
-      /// ⚠️ Aquí necesitas lat/lng del cliente
-      /// TEMPORAL (puedes cambiar luego por GeoPoint)
+      /// ⚠️ TEMPORAL (debes usar GeoPoint después)
       destination = const LatLng(19.4326, -99.1332);
 
       /// 4. Ruta
@@ -68,12 +72,13 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
         destination: destination!,
       );
 
-      /// 5. Markers y polyline
+      /// 5. Markers
       markers = _trackingService.buildMarkers(
         origin: origin!,
         destination: destination!,
       );
 
+      /// 6. Polyline
       polylines = _trackingService.buildPolyline(route);
     } catch (e) {
       debugPrint("Error mapa: $e");
@@ -84,36 +89,25 @@ class _DriverMapScreenState extends State<DriverMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (pedido == null) {
+      return const Scaffold(body: Center(child: Text("Sin pedido activo")));
+    }
+
     return Scaffold(
-      backgroundColor: AppTheme.lightBackground,
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : pedido == null
-          ? const Center(child: Text("No hay pedido asignado"))
-          : Column(
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 10),
-
-                /// MAPA REAL
-                SizedBox(
-                  height: 250,
-                  child: GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: origin!,
-                      zoom: 14,
-                    ),
-                    markers: markers,
-                    polylines: polylines,
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-                _buildDestinationCard(),
-                const SizedBox(height: 10),
-                _buildSummaryCard(),
-              ],
-            ),
+      appBar: AppBar(title: const Text("Mapa")),
+      body: GoogleMap(
+        initialCameraPosition: CameraPosition(
+          target: origin ?? const LatLng(19.4326, -99.1332),
+          zoom: 14,
+        ),
+        markers: markers,
+        polylines: polylines,
+        myLocationEnabled: true,
+      ),
     );
   }
 

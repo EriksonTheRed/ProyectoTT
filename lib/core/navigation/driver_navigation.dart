@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../features/driver/profile/driver_profile_screen.dart';
 import '../../features/driver/home/driver_home_screen.dart';
 import '../../features/driver/history/driver_history_screen.dart';
+import '../../features/driver/orders/driver_order_screen.dart';
 import '../../features/driver/map/driver_map_screen.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 
@@ -31,6 +32,7 @@ class _DriverNavigationState extends State<DriverNavigation> {
 
     final screens = [
       DriverHomeScreen(usuario: usuario),
+      DriverOrderScreen(usuario: usuario),
       DriverHistoryScreen(usuario: usuario),
       DriverMapScreen(usuario: usuario),
       DriverProfileScreen(usuario: usuario),
@@ -47,6 +49,7 @@ class _DriverNavigationState extends State<DriverNavigation> {
         unselectedItemColor: Colors.grey,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: "Inicio"),
+          BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: "Pedidos"),
           BottomNavigationBarItem(
             icon: Icon(Icons.access_time),
             label: "Historial",
