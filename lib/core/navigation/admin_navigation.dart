@@ -36,7 +36,7 @@ class _AdminNavigationState extends State<AdminNavigation> {
       const AdminMonitorScreen(),
 
       /// 👇 AQUÍ YA USAMOS EL USUARIO REAL
-      AdminConfigScreen(usuario: usuario),
+      AdminConfigScreen(usuario: usuario, onNavigate: changeTab),
     ];
 
     return Scaffold(

@@ -163,4 +163,17 @@ class PedidoService {
 
     return transiciones[actual]?.contains(nuevo) ?? false;
   }
+
+  Future<List<Pedido>> getPedidos() async {
+    final snapshot = await _firestore
+        .collection(_collection)
+        .orderBy('fecha_creacion', descending: true)
+        .get();
+
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+      data['id'] = doc.id;
+      return Pedido.fromMap(data);
+    }).toList();
+  }
 }

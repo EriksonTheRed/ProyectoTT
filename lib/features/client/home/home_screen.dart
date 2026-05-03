@@ -7,7 +7,7 @@ import 'package:purificadora_app/data/services/client_service.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  final Function(int)? onNavigate;
+  final Function(int, {Pedido? pedido})? onNavigate; // ✅ FIX
   final Usuario usuario;
 
   const HomeScreen({super.key, this.onNavigate, required this.usuario});
@@ -70,6 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// =========================
   /// NAVIGAR A TRACKING
   /// =========================
+  /// 🔥 NAVEGACIÓN CORRECTA
   void navegarTracking() {
     if (isLoading) return;
 
@@ -83,12 +84,9 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            TrackingScreen(usuario: widget.usuario, pedido: pedidoActual!),
-      ),
+    widget.onNavigate?.call(
+      0, // 👈 índice irrelevante ahora
+      pedido: pedidoActual,
     );
   }
 
@@ -176,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
             title: "Seguimiento",
             subtitle: "Rastrea tu pedido actual",
             color: Colors.teal,
-            onTap: navegarTracking, // ✅ FIX
+            onTap: navegarTracking,
           ),
           const SizedBox(height: 15),
           _ActionCard(
@@ -237,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: navegarTracking, // ✅ FIX CRÍTICO
+              onTap: navegarTracking,
               child: const Text(
                 "Ver seguimiento →",
                 style: TextStyle(

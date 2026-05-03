@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
-import 'package:purificadora_app/data/services/pedido_service.dart';
-import 'package:purificadora_app/data/services/client_service.dart';
 import 'package:purificadora_app/data/services/user_service.dart';
 
 class TrackingScreen extends StatefulWidget {
   final Usuario usuario;
   final Pedido pedido;
+  final Function(int)? onNavigate;
 
   const TrackingScreen({
     super.key,
     required this.usuario,
     required this.pedido,
+    this.onNavigate,
   });
 
   @override
@@ -21,46 +21,29 @@ class TrackingScreen extends StatefulWidget {
 }
 
 class _TrackingScreenState extends State<TrackingScreen> {
-  final PedidoService _pedidoService = PedidoService();
   final UserService _userService = UserService();
-  final ClientService _clientService = ClientService(PedidoService());
 
-  Pedido? pedido;
   Usuario? repartidor;
   bool isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadTracking();
+    _loadRepartidor();
   }
 
-  Future<void> _loadTracking() async {
+  Future<void> _loadRepartidor() async {
     try {
-      final pedidos = await _clientService.getMyPedidos(widget.usuario.uid);
-
-      Pedido? pedidoEncontrado;
-
-      for (var p in pedidos) {
-        if (p.estado == EstadoPedido.pendiente ||
-            p.estado == EstadoPedido.proceso) {
-          pedidoEncontrado = p;
-          break;
-        }
-      }
-
-      if (pedidoEncontrado != null) {
-        pedido = pedidoEncontrado;
-
-        if (pedido!.repartidorId != null) {
-          repartidor = await _userService.getUserById(pedido!.repartidorId!);
-        }
-      } else {
-        pedido = null;
+      if (widget.pedido.repartidorId != null) {
+        repartidor = await _userService.getUserById(
+          widget.pedido.repartidorId!,
+        );
       }
     } catch (e) {
-      pedido = null;
+      debugPrint("Error cargando repartidor: $e");
     }
+
+    if (!mounted) return;
 
     setState(() {
       isLoading = false;
@@ -71,10 +54,9 @@ class _TrackingScreenState extends State<TrackingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
+
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : pedido == null
-          ? const Center(child: Text("No hay pedido activo"))
           : SingleChildScrollView(
               child: Column(
                 children: [
@@ -89,6 +71,25 @@ class _TrackingScreenState extends State<TrackingScreen> {
                 ],
               ),
             ),
+
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: 0, // 🔧 ajusta según tu navegación real
+        onTap: (index) {
+          widget.onNavigate?.call(index);
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Inicio"),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.shopping_cart),
+            label: "Pedido",
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history),
+            label: "Historial",
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Perfil"),
+        ],
+      ),
     );
   }
 
@@ -122,7 +123,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
           const SizedBox(height: 8),
           const Text("Pedido", style: TextStyle(color: Colors.white70)),
           Text(
-            "#${pedido!.id}",
+            "#${widget.pedido.id}",
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w600,
@@ -137,7 +138,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
   /// STATUS
   /// =========================
   Widget _buildStatusCard() {
-    final estadoTexto = _estadoTexto(pedido!.estado);
+    final estadoTexto = _estadoTexto(widget.pedido.estado);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -194,9 +195,7 @@ class _TrackingScreenState extends State<TrackingScreen> {
                   ],
                 ),
                 ElevatedButton.icon(
-                  onPressed: () {
-                    // opcional: abrir marcador de llamada
-                  },
+                  onPressed: () {},
                   icon: const Icon(Icons.phone),
                   label: const Text("Llamar"),
                 ),
@@ -218,13 +217,12 @@ class _TrackingScreenState extends State<TrackingScreen> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("${pedido!.cantidad} Garrafones"),
+              Text("${widget.pedido.cantidad} Garrafones"),
               Text(
-                "\$${pedido!.total.toStringAsFixed(0)} MXN",
+                "\$${widget.pedido.total.toStringAsFixed(0)} MXN",
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.blue,
@@ -232,17 +230,14 @@ class _TrackingScreenState extends State<TrackingScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
           const Text(
             "Dirección de entrega",
             style: TextStyle(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
-
           Text(
-            pedido!.direccionEntrega,
+            widget.pedido.direccionEntrega,
             style: const TextStyle(color: Colors.grey),
           ),
         ],

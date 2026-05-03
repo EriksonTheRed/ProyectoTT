@@ -222,20 +222,24 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   Widget _logoutButton(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-        onPressed: () async {
-          await _authService.signOut();
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.red,
+            padding: const EdgeInsets.symmetric(vertical: 15),
+          ),
+          onPressed: () async {
+            await _authService.signOut();
 
-          if (!mounted) return;
-
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false,
-          );
-        },
-        child: const Text("Cerrar sesión"),
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (route) => false,
+            );
+          },
+          child: const Text("Cerrar sesión"),
+        ),
       ),
     );
   }

@@ -24,7 +24,6 @@ class UserService {
     final snapshot = await _firestore
         .collection(_collection)
         .where('rol', isEqualTo: role)
-        .where('activo', isEqualTo: true)
         .get();
 
     return snapshot.docs.map((doc) => Usuario.fromMap(doc.data())).toList();
@@ -58,7 +57,6 @@ class UserService {
     final snapshot = await _firestore
         .collection(_collection)
         .where('rol', isEqualTo: 'repartidor')
-        .where('activo', isEqualTo: true)
         .where('disponible', isEqualTo: true)
         .get();
 

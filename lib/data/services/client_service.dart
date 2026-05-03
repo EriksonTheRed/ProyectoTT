@@ -1,6 +1,5 @@
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
-import 'package:purificadora_app/data/services/pedido_service.dart';
 
 class ClientService {
   final PedidoService _pedidoService;

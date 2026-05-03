@@ -49,7 +49,13 @@ class DeliveryService {
   Future<List<Pedido>> getPedidosAsignados(String repartidorId) async {
     final pedidos = await _pedidoService.getPedidosByRepartidor(repartidorId);
 
-    return pedidos.where((p) => p.estado == EstadoPedido.proceso).toList();
+    return pedidos
+        .where(
+          (p) =>
+              p.estado == EstadoPedido.pendiente ||
+              p.estado == EstadoPedido.proceso,
+        )
+        .toList();
   }
 
   /// =========================

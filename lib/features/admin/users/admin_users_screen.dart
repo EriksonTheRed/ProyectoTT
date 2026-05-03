@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
-import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
 import 'package:purificadora_app/data/services/admin_service.dart';
 import 'package:purificadora_app/data/services/pedido_service.dart';
 import 'package:purificadora_app/data/services/user_service.dart';
 import 'package:purificadora_app/data/services/auth_service.dart';
+import 'package:purificadora_app/features/auth/login_screen.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -23,21 +23,20 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
   final UserService _userService = UserService();
 
   int selectedType = 0;
-  int selectedTab = 0;
 
   List<Usuario> usuarios = [];
   bool isLoading = true;
-
-  String _getRol() {
-    const roles = ['cliente', 'repartidor', 'admin'];
-    return roles[selectedTab];
-  }
 
   final nombreCtrl = TextEditingController();
   final telefonoCtrl = TextEditingController();
   final correoCtrl = TextEditingController();
   final direccionCtrl = TextEditingController();
   final passwordCtrl = TextEditingController();
+
+  String _getRol() {
+    const roles = ['cliente', 'repartidor', 'admin'];
+    return roles[selectedType];
+  }
 
   @override
   void initState() {
@@ -47,9 +46,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
 
   Future<void> _loadUsers() async {
     try {
-      final rol = _getRol();
+      final users = await _userService.getUsersByRole(_getRol());
 
-      final users = await _userService.getUsersByRole(rol);
+      if (!mounted) return;
 
       setState(() {
         usuarios = users;
@@ -61,56 +60,103 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     }
   }
 
+  /// =========================
+  /// LOGOUT
+  /// =========================
+  Future<void> _logout() async {
+    try {
+      await _authService.signOut();
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Error al cerrar sesión")));
+    }
+  }
+
+  /// =========================
+  /// BUILD
+  /// =========================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 20),
-                  _buildUserTypeSelector(),
-                  const SizedBox(height: 20),
-                  _buildForm(),
-                  const SizedBox(height: 20),
-                  _buildRecentUsers(),
-                  const SizedBox(height: 30),
-                ],
+          : ScrollConfiguration(
+              behavior: const MaterialScrollBehavior().copyWith(
+                overscroll: false,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 20),
+                    _buildUserTypeSelector(),
+                    const SizedBox(height: 20),
+                    _buildForm(),
+                    const SizedBox(height: 20),
+                    _buildUsersList(),
+                    const SizedBox(height: 30),
+                  ],
+                ),
               ),
             ),
     );
   }
 
+  /// =========================
   /// HEADER
+  /// =========================
   Widget _buildHeader() {
+    final top = MediaQuery.of(context).padding.top;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+      padding: EdgeInsets.only(top: top + 20, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
         ),
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            "Registro de Usuarios",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-            ),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Registro de Usuarios",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                "Crear nuevo usuario",
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
           ),
-          Text("Crear nuevo usuario", style: TextStyle(color: Colors.white70)),
+          IconButton(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout, color: Colors.white),
+          ),
         ],
       ),
     );
   }
 
+  /// =========================
+  /// SELECTOR
+  /// =========================
   Widget _buildUserTypeSelector() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -130,7 +176,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     final isSelected = selectedType == index;
 
     return Expanded(
-      child: GestureDetector(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
         onTap: () async {
           setState(() {
             selectedType = index;
@@ -139,7 +186,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           await _loadUsers();
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             color: isSelected ? AppTheme.primaryBlue : Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -149,6 +196,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               text,
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ),
@@ -157,6 +205,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
+  /// =========================
+  /// FORM
+  /// =========================
   Widget _buildForm() {
     return _card(
       Column(
@@ -170,12 +221,13 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
           _inputField("Dirección", direccionCtrl),
           const SizedBox(height: 10),
           _inputField("Password", passwordCtrl),
-
           const SizedBox(height: 20),
-
-          ElevatedButton(
-            onPressed: _registrarUsuario,
-            child: Text("Registrar ${_getRol()}"),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _registrarUsuario,
+              child: Text("Registrar ${_getRol()}"),
+            ),
           ),
         ],
       ),
@@ -217,7 +269,10 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
-  Widget _buildRecentUsers() {
+  /// =========================
+  /// USERS LIST
+  /// =========================
+  Widget _buildUsersList() {
     return Column(
       children: [
         const Padding(
@@ -232,7 +287,14 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
         ),
         const SizedBox(height: 10),
 
-        ...usuarios.map(_userCard),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: usuarios.length,
+          itemBuilder: (context, index) {
+            return _userCard(usuarios[index]);
+          },
+        ),
       ],
     );
   }
@@ -257,6 +319,9 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
   }
 
+  /// =========================
+  /// CARD BASE
+  /// =========================
   Widget _card(Widget child) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

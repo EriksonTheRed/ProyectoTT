@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../../core/theme/app_theme.dart';
 import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
@@ -40,7 +41,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
       final resumen = await _adminService.getResumenAdmin();
       final pedidos = await _adminService.getPedidosActivos();
 
-      /// Obtener usuarios relacionados
       for (var p in pedidos) {
         if (!usuarios.containsKey(p.clienteId)) {
           final user = await _adminService.getUsuarioById(p.clienteId);
@@ -69,34 +69,48 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.lightBackground,
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 20),
-                  _buildStatsGrid(),
-                  const SizedBox(height: 20),
-                  _buildPerformance(),
-                  const SizedBox(height: 20),
-                  _buildActiveOrders(),
-                  const SizedBox(height: 30),
-                ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        backgroundColor: AppTheme.lightBackground,
+        body: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : ScrollConfiguration(
+                // 🔥 FIX REAL: elimina stretch overscroll
+                behavior: const MaterialScrollBehavior().copyWith(
+                  overscroll: false,
+                ),
+                child: ListView(
+                  physics: const ClampingScrollPhysics(),
+                  children: [
+                    _buildHeader(context),
+                    const SizedBox(height: 20),
+                    _buildStatsGrid(),
+                    const SizedBox(height: 20),
+                    _buildPerformance(),
+                    const SizedBox(height: 20),
+                    _buildActiveOrders(),
+                    const SizedBox(height: 30),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 
   /// =========================
   /// HEADER
   /// =========================
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final top = MediaQuery.of(context).padding.top;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+      padding: EdgeInsets.only(top: top + 20, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
@@ -123,9 +137,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  /// =========================
-  /// STATS
-  /// =========================
   Widget _buildStatsGrid() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -161,9 +172,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  /// =========================
-  /// PERFORMANCE
-  /// =========================
   Widget _buildPerformance() {
     return _card(
       Column(
@@ -184,9 +192,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
   }
 
-  /// =========================
-  /// PEDIDOS ACTIVOS
-  /// =========================
   Widget _buildActiveOrders() {
     return Column(
       children: [
@@ -201,7 +206,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           ),
         ),
         const SizedBox(height: 10),
-
         ...pedidosActivos.map((p) => _orderCard(p)).toList(),
       ],
     );
@@ -213,7 +217,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         ? usuarios[pedido.repartidorId!]
         : null;
 
-    Color color = pedido.estado == EstadoPedido.proceso
+    final color = pedido.estado == EstadoPedido.proceso
         ? Colors.orange
         : Colors.blue;
 
@@ -239,14 +243,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             ],
           ),
           const SizedBox(height: 5),
-
           Text(
             cliente?.nombre ?? "Cliente",
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 5),
-
           Text("Repartidor: ${repartidor?.nombre ?? "Sin asignar"}"),
         ],
       ),
@@ -268,9 +269,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 }
 
-/// =========================
-/// STAT CARD
-/// =========================
 class _StatCard extends StatelessWidget {
   final String title;
   final String value;

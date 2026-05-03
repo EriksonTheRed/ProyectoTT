@@ -10,48 +10,28 @@ class AdminService {
   AdminService(this._pedidoService, this._userService);
 
   /// =========================
-  /// ASIGNAR REPARTIDOR A PEDIDO
+  /// ASIGNAR REPARTIDOR A PEDIDO (AUTOMATICO
   /// =========================
-  Future<void> asignarRepartidor({
-    required String pedidoId,
-    required String repartidorId,
-  }) async {
+  Future<void> asignarRepartidorAutomatico(String pedidoId) async {
+    final repartidores = await _userService.getAvailableDeliveryUsers();
     final pedido = await _pedidoService.getPedidoById(pedidoId);
 
-    if (pedido == null) {
-      throw Exception('Pedido no encontrado');
+    if (pedido == null) throw Exception("Pedido no encontrado");
+
+    if (pedido.estado != EstadoPedido.pendiente ||
+        pedido.repartidorId != null) {
+      throw Exception("Pedido ya no disponible");
     }
 
-    /// Validar estado
-    if (pedido.estado != EstadoPedido.pendiente) {
-      throw Exception('El pedido no está disponible para asignación');
-    }
+    final repartidor = repartidores.first;
 
-    final repartidor = await _userService.getUserById(repartidorId);
-
-    if (repartidor == null) {
-      throw Exception('Repartidor no encontrado');
-    }
-
-    /// Validar rol
-    if (repartidor.rol != 'repartidor') {
-      throw Exception('El usuario no es repartidor');
-    }
-
-    /// Validar disponibilidad
-    if (repartidor.disponible != true) {
-      throw Exception('Repartidor no disponible');
-    }
-
-    /// Asignar pedido
     await _pedidoService.assignRepartidor(
       pedidoId: pedidoId,
-      repartidorId: repartidorId,
+      repartidorId: repartidor.uid,
     );
 
-    /// Marcar repartidor como ocupado
     await _userService.updateDeliveryAvailability(
-      uid: repartidorId,
+      uid: repartidor.uid,
       isAvailable: false,
     );
   }
@@ -60,30 +40,9 @@ class AdminService {
   /// OBTENER PEDIDOS ACTIVOS
   /// =========================
   Future<List<Pedido>> getPedidosActivos() async {
-    final pendientes = await _pedidoService.getPedidosPendientes();
-    final enProceso = await _getPedidosEnProceso();
+    final pedidos = await _pedidoService.getPedidos();
 
-    return [...pendientes, ...enProceso];
-  }
-
-  /// =========================
-  /// PEDIDOS EN PROCESO
-  /// =========================
-  Future<List<Pedido>> _getPedidosEnProceso() async {
-    final repartidores = await _userService.getDeliveryUsers();
-
-    List<Pedido> pedidos = [];
-
-    for (var r in repartidores) {
-      final pedidosRepartidor = await _pedidoService.getPedidosByRepartidor(
-        r.uid,
-      );
-
-      pedidos.addAll(
-        pedidosRepartidor.where((p) => p.estado == EstadoPedido.proceso),
-      );
-    }
-
+    // 👉 NO filtrar aquí
     return pedidos;
   }
 

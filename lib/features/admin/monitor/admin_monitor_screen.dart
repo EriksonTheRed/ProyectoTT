@@ -37,13 +37,17 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
 
   Future<void> _loadData() async {
     try {
-      /// 🔹 Obtener datos base
       final reps = await _adminService.getRepartidores();
       final orders = await _adminService.getPedidosActivos();
       final resumen = await _adminService.getResumenAdmin();
 
-      /// 🔹 Mapear clientes (mejorado)
       final Map<String, Usuario> clientesTemp = {};
+
+      print("REPARTIDORES: ${reps.length}");
+
+      for (var r in reps) {
+        print("→ ${r.nombre} | rol: ${r.rol} | disponible: ${r.disponible}");
+      }
 
       for (var p in orders) {
         final id = p.clienteId;
@@ -54,12 +58,13 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
         }
       }
 
-      /// 🔹 Stats
       final enRutaCount = orders
           .where((p) => p.estado == EstadoPedido.proceso)
           .length;
 
       final activosCount = reps.where((r) => r.disponible == true).length;
+
+      if (!mounted) return;
 
       setState(() {
         repartidores = reps;
@@ -84,28 +89,28 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
       backgroundColor: AppTheme.lightBackground,
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
-                children: [
-                  _buildHeader(),
-                  const SizedBox(height: 20),
-                  _buildSystemStatus(),
-                  const SizedBox(height: 15),
-                  _buildStats(),
-                  const SizedBox(height: 20),
-                  _buildDriversList(),
-                  const SizedBox(height: 30),
-                ],
-              ),
+          : ListView(
+              children: [
+                _buildHeader(),
+                const SizedBox(height: 20),
+                _buildSystemStatus(),
+                const SizedBox(height: 15),
+                _buildStats(),
+                const SizedBox(height: 20),
+                _buildDriversList(),
+                const SizedBox(height: 30),
+              ],
             ),
     );
   }
 
   /// HEADER
   Widget _buildHeader() {
+    final top = MediaQuery.of(context).padding.top;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+      padding: EdgeInsets.only(top: top + 20, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
@@ -146,13 +151,13 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
               Text("Sistema activo"),
             ],
           ),
-          Text("${now.hour}:${now.minute}"),
+          Text("${now.hour}:${now.minute.toString().padLeft(2, '0')}"),
         ],
       ),
     );
   }
 
-  /// STATS REALES
+  /// STATS
   Widget _buildStats() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -189,7 +194,7 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
     );
   }
 
-  /// LISTA REAL
+  /// LISTA
   Widget _buildDriversList() {
     return Column(
       children: [
@@ -205,26 +210,45 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
         ),
         const SizedBox(height: 10),
 
-        ...repartidores.map((r) => _driverCard(r)).toList(),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: repartidores.length,
+          itemBuilder: (context, index) {
+            return _driverCard(repartidores[index]);
+          },
+        ),
       ],
     );
   }
 
+  /// CARD
   Widget _driverCard(Usuario r) {
-    final pedido = pedidos
-        .where((p) => p.repartidorId == r.uid)
-        .cast<Pedido?>()
-        .firstWhere((p) => p != null, orElse: () => null);
+    Pedido? pedido;
+
+    try {
+      pedido = pedidos.firstWhere(
+        (p) => p.repartidorId == r.uid && p.estado == EstadoPedido.proceso,
+      );
+    } catch (_) {
+      pedido = null;
+    }
 
     final cliente = pedido != null ? clientes[pedido.clienteId] : null;
 
-    String estado = r.disponible == true
-        ? "Disponible"
-        : (pedido != null ? "En ruta" : "Inactivo");
+    String estado;
+    Color color;
 
-    Color color = r.disponible == true
-        ? Colors.grey
-        : (pedido != null ? Colors.orange : Colors.blue);
+    if (pedido != null) {
+      estado = "En ruta";
+      color = Colors.orange;
+    } else if (r.disponible == true) {
+      estado = "Disponible";
+      color = Colors.green;
+    } else {
+      estado = "Inactivo";
+      color = Colors.grey;
+    }
 
     return _card(
       Column(
@@ -246,9 +270,9 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
                       r.nombre,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    Text(
+                    const Text(
                       "Repartidor",
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
                     ),
                   ],
                 ),
@@ -270,7 +294,7 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
 
           const SizedBox(height: 10),
 
-          if (pedido != null)
+          if (pedido != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -289,21 +313,18 @@ class _AdminMonitorScreenState extends State<AdminMonitorScreen> {
                 ],
               ),
             ),
-
-          const SizedBox(height: 10),
-
-          if (pedido != null)
+            const SizedBox(height: 10),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, size: 14, color: Colors.red),
-                    const SizedBox(width: 5),
-                    Text(pedido.direccionEntrega),
-                  ],
-                ),
+                const Icon(Icons.location_on, size: 14, color: Colors.red),
+                const SizedBox(width: 5),
+                Expanded(child: Text(pedido.direccionEntrega)),
               ],
+            ),
+          ] else
+            const Text(
+              "Sin pedido asignado",
+              style: TextStyle(color: Colors.grey),
             ),
         ],
       ),

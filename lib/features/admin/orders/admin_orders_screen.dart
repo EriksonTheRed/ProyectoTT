@@ -23,7 +23,6 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
   final filters = ["Todos", "Pendiente", "En proceso", "Completado"];
 
   List<Pedido> pedidos = [];
-  List<Usuario> repartidores = [];
   Map<String, Usuario> usuarios = {};
 
   bool isLoading = true;
@@ -34,25 +33,21 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     _loadData();
   }
 
+  /// =========================
+  /// LOAD DATA
+  /// =========================
   Future<void> _loadData() async {
     try {
-      /// 🔹 Pedidos (activos en tu arquitectura)
       final pedidosData = await _adminService.getPedidosActivos();
 
-      /// 🔹 Repartidores
-      final reps = await _adminService.getRepartidores();
-
-      /// 🔹 Mapear usuarios (clientes + repartidores)
       final Map<String, Usuario> usuariosTemp = {};
 
       for (var p in pedidosData) {
-        /// Cliente
         if (!usuariosTemp.containsKey(p.clienteId)) {
           final user = await _adminService.getUsuarioById(p.clienteId);
           if (user != null) usuariosTemp[p.clienteId] = user;
         }
 
-        /// Repartidor
         if (p.repartidorId != null &&
             !usuariosTemp.containsKey(p.repartidorId)) {
           final user = await _adminService.getUsuarioById(p.repartidorId!);
@@ -60,9 +55,10 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
         }
       }
 
+      if (!mounted) return;
+
       setState(() {
         pedidos = pedidosData;
-        repartidores = reps;
         usuarios = usuariosTemp;
         isLoading = false;
       });
@@ -72,6 +68,9 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     }
   }
 
+  /// =========================
+  /// FILTRO
+  /// =========================
   List<Pedido> get pedidosFiltrados {
     if (selectedFilter == 0) return pedidos;
 
@@ -85,16 +84,23 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     return pedidos.where((p) => p.estado == estado).toList();
   }
 
+  /// =========================
+  /// BUILD
+  /// =========================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.lightBackground,
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              child: Column(
+          : ScrollConfiguration(
+              behavior: const MaterialScrollBehavior().copyWith(
+                overscroll: false, // 🔥 elimina stretch
+              ),
+              child: ListView(
+                physics: const ClampingScrollPhysics(),
                 children: [
-                  _buildHeader(),
+                  _buildHeader(context),
                   const SizedBox(height: 20),
                   _buildSearch(),
                   const SizedBox(height: 15),
@@ -108,10 +114,15 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  /// =========================
+  /// HEADER
+  /// =========================
+  Widget _buildHeader(BuildContext context) {
+    final top = MediaQuery.of(context).padding.top;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+      padding: EdgeInsets.only(top: top + 20, left: 20, right: 20, bottom: 30),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
@@ -137,6 +148,9 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     );
   }
 
+  /// =========================
+  /// SEARCH
+  /// =========================
   Widget _buildSearch() {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 20),
@@ -149,6 +163,9 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     );
   }
 
+  /// =========================
+  /// FILTERS
+  /// =========================
   Widget _buildFilters() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -187,28 +204,25 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     );
   }
 
+  /// =========================
+  /// ORDERS LIST
+  /// =========================
   Widget _buildOrders() {
     final list = pedidosFiltrados;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              "${list.length} pedidos",
-              style: const TextStyle(color: Colors.grey),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-
-        ...list.map(_orderCard),
-      ],
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: list.length,
+      itemBuilder: (context, index) {
+        return _orderCard(list[index]);
+      },
     );
   }
 
+  /// =========================
+  /// CARD
+  /// =========================
   Widget _orderCard(Pedido p) {
     final cliente = usuarios[p.clienteId];
     final repartidor = p.repartidorId != null
@@ -226,11 +240,26 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("#${p.id}"),
-            Text(cliente?.nombre ?? "Cliente"),
+            Text("#${p.id}", style: const TextStyle(color: Colors.grey)),
+
+            const SizedBox(height: 5),
+
+            Text(
+              cliente?.nombre ?? "Cliente",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+
+            const SizedBox(height: 5),
+
             Text("${p.cantidad} garrafones"),
             Text("\$${p.total} MXN"),
-            Text(p.direccionEntrega),
+
+            const SizedBox(height: 5),
+
+            Text(
+              p.direccionEntrega,
+              style: const TextStyle(color: Colors.grey),
+            ),
 
             const SizedBox(height: 10),
 
@@ -247,16 +276,22 @@ class _AdminOrdersScreenState extends State<AdminOrdersScreen> {
     );
   }
 
+  /// =========================
+  /// ASIGNAR
+  /// =========================
   Future<void> _asignar(String pedidoId) async {
-    if (repartidores.isEmpty) return;
+    try {
+      await _adminService.asignarRepartidorAutomatico(pedidoId);
 
-    final rep = repartidores.first;
+      if (!mounted) return;
 
-    await _adminService.asignarRepartidor(
-      pedidoId: pedidoId,
-      repartidorId: rep.uid,
-    );
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
 
-    _loadData();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
   }
 }

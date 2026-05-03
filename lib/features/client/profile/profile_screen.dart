@@ -191,20 +191,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         actions: [
           TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
+          ),
+          TextButton(
             onPressed: () async {
+              final nombre = nombreController.text.trim();
+              final telefono = telefonoController.text.trim();
+              final direccion = direccionController.text.trim();
+
+              // 🔥 VALIDACIÓN: sin cambios → solo cerrar
+              if (nombre == usuario.nombre &&
+                  telefono == usuario.telefono &&
+                  direccion == (usuario.direccion ?? "")) {
+                Navigator.pop(context);
+                return;
+              }
+
               try {
                 await _userService.updateUserProfile(
                   uid: usuario.uid,
-                  name: nombreController.text,
-                  phone: telefonoController.text,
-                  address: direccionController.text,
+                  name: nombre,
+                  phone: telefono,
+                  address: direccion,
                 );
+
+                if (!mounted) return;
 
                 setState(() {
                   usuario = usuario.copyWith(
-                    nombre: nombreController.text,
-                    telefono: telefonoController.text,
-                    direccion: direccionController.text,
+                    nombre: nombre,
+                    telefono: telefono,
+                    direccion: direccion,
                   );
                 });
 
@@ -214,20 +232,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SnackBar(content: Text("Perfil actualizado")),
                 );
               } catch (e) {
+                if (!mounted) return;
+
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("Error al actualizar perfil")),
+                  const SnackBar(content: Text("Error al actualizar perfil")),
                 );
               }
-
-              setState(() {
-                usuario = usuario.copyWith(
-                  nombre: nombreController.text,
-                  telefono: telefonoController.text,
-                  direccion: direccionController.text,
-                );
-              });
-
-              Navigator.pop(context);
             },
             child: const Text("Guardar"),
           ),

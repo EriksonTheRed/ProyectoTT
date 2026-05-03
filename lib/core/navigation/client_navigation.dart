@@ -4,6 +4,7 @@ import '../../features/client/orders/order_screen.dart';
 import '../../features/client/history/history_screen.dart';
 import '../../features/client/profile/profile_screen.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
+import 'package:purificadora_app/domain/models/pedido.dart';
 import 'package:purificadora_app/features/client/tracking/tracking_screen.dart';
 
 class ClientNavigation extends StatefulWidget {
@@ -18,9 +19,22 @@ class ClientNavigation extends StatefulWidget {
 class _ClientNavigationState extends State<ClientNavigation> {
   int currentIndex = 0;
 
-  void changeTab(int index) {
+  // 🔥 Estado para tracking
+  Pedido? pedidoTracking;
+
+  /// =========================
+  /// CONTROL DE NAVEGACIÓN
+  /// =========================
+  void changeTab(int index, {Pedido? pedido}) {
     setState(() {
-      currentIndex = index;
+      if (pedido != null) {
+        // 👉 Activar pantalla de tracking
+        pedidoTracking = pedido;
+      } else {
+        // 👉 Navegación normal
+        pedidoTracking = null;
+        currentIndex = index;
+      }
     });
   }
 
@@ -28,23 +42,39 @@ class _ClientNavigationState extends State<ClientNavigation> {
   Widget build(BuildContext context) {
     final usuario = widget.usuario;
 
-    final screens = [
-      HomeScreen(onNavigate: changeTab, usuario: usuario),
+    /// =========================
+    /// BODY DINÁMICO
+    /// =========================
+    Widget body;
 
-      OrderScreen(usuario: usuario),
-
-      HistoryScreen(usuario: usuario),
-
-      ProfileScreen(usuario: usuario),
-    ];
+    if (pedidoTracking != null) {
+      body = TrackingScreen(
+        usuario: usuario,
+        pedido: pedidoTracking!,
+        onNavigate: changeTab,
+      );
+    } else {
+      body = IndexedStack(
+        index: currentIndex,
+        children: [
+          HomeScreen(onNavigate: changeTab, usuario: usuario),
+          OrderScreen(usuario: usuario),
+          HistoryScreen(usuario: usuario),
+          ProfileScreen(usuario: usuario),
+        ],
+      );
+    }
 
     return Scaffold(
-      body: IndexedStack(index: currentIndex, children: screens),
+      body: body,
 
+      /// =========================
+      /// BOTTOM NAVIGATION
+      /// =========================
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         type: BottomNavigationBarType.fixed,
-        onTap: changeTab,
+        onTap: (index) => changeTab(index),
         selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey,
         items: const [
