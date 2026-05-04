@@ -10,106 +10,111 @@ class AdminService {
   AdminService(this._pedidoService, this._userService);
 
   /// =========================
-  /// ASIGNAR REPARTIDOR A PEDIDO (AUTOMATICO
+  /// ASIGNAR REPARTIDOR MANUAL
   /// =========================
-  Future<void> asignarRepartidorAutomatico(String pedidoId) async {
-    final repartidores = await _userService.getAvailableDeliveryUsers();
-    final pedido = await _pedidoService.getPedidoById(pedidoId);
-
-    if (pedido == null) throw Exception("Pedido no encontrado");
-
-    if (pedido.estado != EstadoPedido.pendiente ||
-        pedido.repartidorId != null) {
-      throw Exception("Pedido ya no disponible");
-    }
-
-    final repartidor = repartidores.first;
-
+  Future<void> asignarRepartidorManual({
+    required String pedidoId,
+    required String repartidorId,
+  }) async {
     await _pedidoService.assignRepartidor(
       pedidoId: pedidoId,
-      repartidorId: repartidor.uid,
+      repartidorId: repartidorId,
     );
 
-    await _userService.updateDeliveryAvailability(
-      uid: repartidor.uid,
-      isAvailable: false,
+  }
+
+  /// =========================
+  /// CAMBIAR ESTADOS
+  /// =========================
+  Future<void> marcarComoEntregado(String pedidoId) async {
+    await _pedidoService.updateEstado(
+      pedidoId: pedidoId,
+      nuevoEstado: EstadoPedido.completado,
+    );
+  }
+
+  Future<void> cancelarPedido(String pedidoId) async {
+    await _pedidoService.updateEstado(
+      pedidoId: pedidoId,
+      nuevoEstado: EstadoPedido.cancelado,
     );
   }
 
   /// =========================
-  /// OBTENER PEDIDOS ACTIVOS
+  /// OBTENER PEDIDOS
   /// =========================
   Future<List<Pedido>> getPedidosActivos() async {
-    final pedidos = await _pedidoService.getPedidos();
-
-    // 👉 NO filtrar aquí
-    return pedidos;
+    return await _pedidoService.getPedidos();
   }
 
   /// =========================
-  /// PEDIDOS DEL DÍA
+  /// PEDIDOS COMPLETADOS HOY
   /// =========================
   Future<List<Pedido>> getPedidosHoy() async {
-    final activos = await getPedidosActivos();
+    final pedidos = await getPedidosActivos();
 
     final now = DateTime.now();
     final inicioDia = DateTime(now.year, now.month, now.day);
 
-    return activos.where((p) {
-      return p.fechaCreacion != null && p.fechaCreacion!.isAfter(inicioDia);
+    return pedidos.where((p) {
+      return p.estado == EstadoPedido.completado &&
+          p.fechaCreacion != null &&
+          p.fechaCreacion!.isAfter(inicioDia);
     }).toList();
   }
 
   /// =========================
-  /// ACTIVAR / DESACTIVAR USUARIO
+  /// USUARIOS
   /// =========================
+
+  /// Activar / desactivar repartidor
   Future<void> setUserActivo({
     required String uid,
     required bool activo,
   }) async {
-    await _userService.updateUserActiveStatus(uid: uid, isActive: activo);
+    await _userService.updateUserActiveStatus(
+      uid: uid,
+      isActive: activo,
+    );
   }
 
-  /// =========================
-  /// OBTENER USUARIO POR ID
-  /// =========================
+  /// Obtener usuario por ID (IMPORTANTE para Home)
   Future<Usuario?> getUsuarioById(String uid) async {
     return await _userService.getUserById(uid);
   }
 
-  /// =========================
-  /// OBTENER REPARTIDORES
-  /// =========================
+  /// Todos los repartidores
   Future<List<Usuario>> getRepartidores() async {
     return await _userService.getDeliveryUsers();
   }
 
-  /// =========================
-  /// OBTENER REPARTIDORES DISPONIBLES
-  /// =========================
-  Future<List<Usuario>> getRepartidoresDisponibles() async {
-    return await _userService.getAvailableDeliveryUsers();
+  Future<List<Usuario>> getRepartidoresActivos() async {
+    final reps = await _userService.getDeliveryUsers();
+    return reps.where((r) => r.activo == true).toList();
   }
 
   /// =========================
-  /// RESUMEN ADMIN (DASHBOARD)
+  /// DASHBOARD
   /// =========================
   Future<Map<String, dynamic>> getResumenAdmin() async {
     final clientes = await _userService.getClients();
-    final repartidores = await _userService.getDeliveryUsers();
 
-    final pedidosActivos = await getPedidosActivos();
+    final repartidoresActivos = await getRepartidoresActivos();
+
+    final pedidos = await getPedidosActivos();
     final pedidosHoy = await getPedidosHoy();
 
     double ventas = 0;
 
-    for (var p in pedidosActivos) {
-      ventas += p.total;
+    for (var p in pedidos) {
+      if (p.estado == EstadoPedido.completado) {
+        ventas += p.total;
+      }
     }
 
     return {
       'clientes': clientes.length,
-      'repartidores': repartidores.length,
+      'repartidores': repartidoresActivos.length,
       'pedidosHoy': pedidosHoy.length,
       'ventas': ventas,
     };

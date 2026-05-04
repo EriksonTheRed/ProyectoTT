@@ -6,20 +6,12 @@ class UserService {
 
   final String _collection = 'users';
 
-  /// =========================
-  /// OBTENER USUARIO POR ID
-  /// =========================
   Future<Usuario?> getUserById(String uid) async {
     final doc = await _firestore.collection(_collection).doc(uid).get();
-
     if (!doc.exists) return null;
-
     return Usuario.fromMap(doc.data()!);
   }
 
-  /// =========================
-  /// OBTENER USUARIOS POR ROL
-  /// =========================
   Future<List<Usuario>> getUsersByRole(String role) async {
     final snapshot = await _firestore
         .collection(_collection)
@@ -29,43 +21,30 @@ class UserService {
     return snapshot.docs.map((doc) => Usuario.fromMap(doc.data())).toList();
   }
 
-  /// =========================
-  /// OBTENER CLIENTES
-  /// =========================
   Future<List<Usuario>> getClients() async {
     return getUsersByRole('cliente');
   }
 
-  /// =========================
-  /// OBTENER ADMINISTRADORES
-  /// =========================
   Future<List<Usuario>> getAdmins() async {
     return getUsersByRole('admin');
   }
 
-  /// =========================
-  /// OBTENER REPARTIDORES
-  /// =========================
   Future<List<Usuario>> getDeliveryUsers() async {
     return getUsersByRole('repartidor');
   }
 
-  /// =========================
-  /// OBTENER REPARTIDORES DISPONIBLES
-  /// =========================
+  /// 🔥 FIX REAL
   Future<List<Usuario>> getAvailableDeliveryUsers() async {
     final snapshot = await _firestore
         .collection(_collection)
         .where('rol', isEqualTo: 'repartidor')
         .where('disponible', isEqualTo: true)
+        .where('activo', isEqualTo: true) // 👈 NUEVO
         .get();
 
     return snapshot.docs.map((doc) => Usuario.fromMap(doc.data())).toList();
   }
 
-  /// =========================
-  /// ACTUALIZAR PERFIL BASICO
-  /// =========================
   Future<void> updateUserProfile({
     required String uid,
     String? name,
@@ -83,9 +62,6 @@ class UserService {
     await _firestore.collection(_collection).doc(uid).update(data);
   }
 
-  /// =========================
-  /// CAMBIAR ESTADO ACTIVO
-  /// =========================
   Future<void> updateUserActiveStatus({
     required String uid,
     required bool isActive,
@@ -95,9 +71,6 @@ class UserService {
     });
   }
 
-  /// =========================
-  /// CAMBIAR DISPONIBILIDAD (REPARTIDOR)
-  /// =========================
   Future<void> updateDeliveryAvailability({
     required String uid,
     required bool isAvailable,

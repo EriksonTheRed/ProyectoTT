@@ -9,6 +9,9 @@ class Usuario {
   final String? direccion;
   final bool? disponible;
 
+  /// activo
+  final bool? activo;
+
   Usuario({
     required this.uid,
     required this.nombre,
@@ -17,6 +20,7 @@ class Usuario {
     required this.rol,
     this.direccion,
     this.disponible,
+    this.activo, // activo
   });
 
   /// Convertir Firestore → Objeto
@@ -29,6 +33,9 @@ class Usuario {
       rol: map['rol'] as String,
       direccion: map['direccion'] as String?,
       disponible: map['disponible'] as bool?,
+
+      /// activo
+      activo: map['activo'] as bool? ?? false,
     );
   }
 
@@ -42,6 +49,9 @@ class Usuario {
       'rol': rol,
       'direccion': direccion,
       'disponible': disponible,
+
+      /// activo
+      'activo': activo ?? false,
     };
   }
 
@@ -53,6 +63,7 @@ class Usuario {
     String? direccion,
     String? rol,
     bool? disponible,
+    bool? activo, // activo
   }) {
     return Usuario(
       uid: uid ?? this.uid,
@@ -62,6 +73,7 @@ class Usuario {
       direccion: direccion ?? this.direccion,
       rol: rol ?? this.rol,
       disponible: disponible ?? this.disponible,
+      activo: activo ?? this.activo, // activo
     );
   }
 }

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../core/theme/app_theme.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:purificadora_app/domain/models/usuario.dart';
-import 'package:purificadora_app/data/services/admin_service.dart';
-import 'package:purificadora_app/data/services/pedido_service.dart';
 import 'package:purificadora_app/data/services/user_service.dart';
-import 'package:purificadora_app/data/services/auth_service.dart';
-import 'package:purificadora_app/features/auth/login_screen.dart';
 
 class AdminUsersScreen extends StatefulWidget {
   const AdminUsersScreen({super.key});
@@ -15,324 +12,202 @@ class AdminUsersScreen extends StatefulWidget {
 }
 
 class _AdminUsersScreenState extends State<AdminUsersScreen> {
-  final AuthService _authService = AuthService();
-  final AdminService _adminService = AdminService(
-    PedidoService(),
-    UserService(),
-  );
   final UserService _userService = UserService();
 
-  int selectedType = 0;
-
   List<Usuario> usuarios = [];
-  bool isLoading = true;
+  bool loading = true;
 
   final nombreCtrl = TextEditingController();
   final telefonoCtrl = TextEditingController();
   final correoCtrl = TextEditingController();
   final direccionCtrl = TextEditingController();
-  final passwordCtrl = TextEditingController();
 
-  String _getRol() {
-    const roles = ['cliente', 'repartidor', 'admin'];
-    return roles[selectedType];
-  }
+  String rolSeleccionado = "cliente";
+  bool isCreating = false;
 
   @override
   void initState() {
     super.initState();
-    _loadUsers();
+    cargarUsuarios();
   }
 
-  Future<void> _loadUsers() async {
+  /// =========================
+  /// CARGAR TODOS LOS USUARIOS
+  /// =========================
+  Future<void> cargarUsuarios() async {
     try {
-      final users = await _userService.getUsersByRole(_getRol());
-
-      if (!mounted) return;
+      final clientes = await _userService.getClients();
+      final repartidores = await _userService.getDeliveryUsers();
+      final admins = await _userService.getAdmins();
 
       setState(() {
-        usuarios = users;
-        isLoading = false;
+        usuarios = [...clientes, ...repartidores, ...admins];
+        loading = false;
       });
     } catch (e) {
-      debugPrint("Users error: $e");
-      setState(() => isLoading = false);
+      debugPrint("Error: $e");
+      setState(() => loading = false);
     }
   }
 
   /// =========================
-  /// LOGOUT
+  /// CREAR USUARIO (REAL)
   /// =========================
-  Future<void> _logout() async {
+  Future<void> crearUsuario() async {
+    if (correoCtrl.text.isEmpty || nombreCtrl.text.isEmpty) return;
+
+    setState(() => isCreating = true);
+
     try {
-      await _authService.signOut();
+      final auth = FirebaseAuth.instance;
+      final firestore = FirebaseFirestore.instance;
+
+      final cred = await auth.createUserWithEmailAndPassword(
+        email: correoCtrl.text.trim(),
+        password: "12345678", // 
+      );
+
+      final uid = cred.user!.uid;
+
+      await firestore.collection('users').doc(uid).set({
+        'uid': uid,
+        'nombre': nombreCtrl.text,
+        'telefono': telefonoCtrl.text,
+        'correo': correoCtrl.text,
+        'direccion': direccionCtrl.text,
+        'rol': rolSeleccionado,
+        'activo': true,
+        'disponible': rolSeleccionado == 'repartidor',
+        'fechaCreacion': FieldValue.serverTimestamp(),
+      });
+
+      nombreCtrl.clear();
+      telefonoCtrl.clear();
+      correoCtrl.clear();
+      direccionCtrl.clear();
+
+      await cargarUsuarios();
 
       if (!mounted) return;
 
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Usuario creado")),
       );
-    } catch (_) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Error al cerrar sesión")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error: $e")),
+      );
     }
+
+    setState(() => isCreating = false);
   }
 
   /// =========================
-  /// BUILD
+  /// UI
   /// =========================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.lightBackground,
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ScrollConfiguration(
-              behavior: const MaterialScrollBehavior().copyWith(
-                overscroll: false,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 20),
-                    _buildUserTypeSelector(),
-                    const SizedBox(height: 20),
-                    _buildForm(),
-                    const SizedBox(height: 20),
-                    _buildUsersList(),
-                    const SizedBox(height: 30),
-                  ],
-                ),
-              ),
-            ),
-    );
-  }
-
-  /// =========================
-  /// HEADER
-  /// =========================
-  Widget _buildHeader() {
-    final top = MediaQuery.of(context).padding.top;
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.only(top: top + 20, left: 20, right: 20, bottom: 30),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AppTheme.primaryBlue, AppTheme.darkBlue],
+      appBar: AppBar(title: const Text("Registro de Usuarios")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _form(),
+            const SizedBox(height: 20),
+            _lista(),
+          ],
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    );
+  }
+
+  /// =========================
+  /// FORMULARIO BONITO
+  /// =========================
+  Widget _form() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
         children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text(
-                "Registro de Usuarios",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                "Crear nuevo usuario",
-                style: TextStyle(color: Colors.white70),
-              ),
+              _chip("cliente"),
+              _chip("repartidor"),
+              _chip("admin"),
             ],
           ),
-          IconButton(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout, color: Colors.white),
-          ),
+          const SizedBox(height: 10),
+          _input("Nombre completo", nombreCtrl),
+          _input("Teléfono", telefonoCtrl),
+          _input("Correo", correoCtrl),
+          _input("Dirección", direccionCtrl),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: isCreating ? null : crearUsuario,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              minimumSize: const Size(double.infinity, 45),
+            ),
+            child: isCreating
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Text("Registrar usuario"),
+          )
         ],
       ),
     );
   }
 
-  /// =========================
-  /// SELECTOR
-  /// =========================
-  Widget _buildUserTypeSelector() {
+  Widget _chip(String rol) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          _typeButton("Cliente", 0),
-          const SizedBox(width: 10),
-          _typeButton("Repartidor", 1),
-          const SizedBox(width: 10),
-          _typeButton("Administrador", 2),
-        ],
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(rol),
+        selected: rolSeleccionado == rol,
+        onSelected: (_) {
+          setState(() => rolSeleccionado = rol);
+        },
       ),
     );
   }
 
-  Widget _typeButton(String text, int index) {
-    final isSelected = selectedType == index;
-
-    return Expanded(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () async {
-          setState(() {
-            selectedType = index;
-            isLoading = true;
-          });
-          await _loadUsers();
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryBlue : Colors.white,
+  Widget _input(String label, TextEditingController ctrl) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: TextField(
+        controller: ctrl,
+        decoration: InputDecoration(
+          labelText: label,
+          border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Center(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.black87,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
         ),
       ),
     );
   }
 
   /// =========================
-  /// FORM
+  /// LISTA DINÁMICA
   /// =========================
-  Widget _buildForm() {
-    return _card(
-      Column(
-        children: [
-          _inputField("Nombre", nombreCtrl),
-          const SizedBox(height: 10),
-          _inputField("Teléfono", telefonoCtrl),
-          const SizedBox(height: 10),
-          _inputField("Correo", correoCtrl),
-          const SizedBox(height: 10),
-          _inputField("Dirección", direccionCtrl),
-          const SizedBox(height: 10),
-          _inputField("Password", passwordCtrl),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _registrarUsuario,
-              child: Text("Registrar ${_getRol()}"),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _registrarUsuario() async {
-    final error = await _authService.createUserByAdmin(
-      nombre: nombreCtrl.text,
-      email: correoCtrl.text,
-      password: passwordCtrl.text,
-      telefono: telefonoCtrl.text,
-      rol: _getRol(),
-    );
-
-    if (error != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error)));
-      return;
+  Widget _lista() {
+    if (loading) {
+      return const CircularProgressIndicator();
     }
 
-    _clearForm();
-    await _loadUsers();
-  }
-
-  void _clearForm() {
-    nombreCtrl.clear();
-    telefonoCtrl.clear();
-    correoCtrl.clear();
-    direccionCtrl.clear();
-    passwordCtrl.clear();
-  }
-
-  Widget _inputField(String hint, TextEditingController ctrl) {
-    return TextField(
-      controller: ctrl,
-      decoration: InputDecoration(hintText: hint),
-    );
-  }
-
-  /// =========================
-  /// USERS LIST
-  /// =========================
-  Widget _buildUsersList() {
     return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              "Usuarios",
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: usuarios.map((u) {
+        return Card(
+          child: ListTile(
+            title: Text(u.nombre),
+            subtitle: Text("${u.rol} - ${u.telefono}"),
           ),
-        ),
-        const SizedBox(height: 10),
-
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: usuarios.length,
-          itemBuilder: (context, index) {
-            return _userCard(usuarios[index]);
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _userCard(Usuario u) {
-    return _card(
-      Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                u.nombre,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-              Text("${u.rol} • ${u.telefono}"),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// =========================
-  /// CARD BASE
-  /// =========================
-  Widget _card(Widget child) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: child,
-      ),
+        );
+      }).toList(),
     );
   }
 }
