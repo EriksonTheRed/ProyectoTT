@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "246295632030",
+    "project_id": "proyecto-tt-a691f",
+    "storage_bucket": "proyecto-tt-a691f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:246295632030:android:27a5f17ae8f227074c038f",
+        "android_client_info": {
+          "package_name": "com.example.purificadora_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAYVrFmW7rw6cZuxbkbte1zuh9kzyrWIak"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
